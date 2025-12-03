@@ -1,11 +1,11 @@
 # Flight Forge
 
-Flight Forge allows 3DOF simulations of rocket flights. The workflow is similar to rocketpy. 
-One needs to define the following:
-
+Flight Forge allows 3DOF simulations of rocket flights. 
 3DOF simulations allow simulations on early design and development of the rocket. These simulations are useful when inertia tensors are still not defined, so we consider the rocket a mass point.
 
 Through the parachute implementation, one can predict terminal velocities based on the mass of the rocket and the characteristics of the parachute
+
+The workflow is similar to rocketpy. One needs to define the following:
 
 ## Environment
 
