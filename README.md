@@ -3,17 +3,29 @@
 Flight Forge allows 3DOF simulations of rocket flights. The workflow is similar to rocketpy. 
 One needs to define the following:
 
+3DOF simulations allow simulations on early design and development of the rocket. These simulations are useful when inertia tensors are still not defined, so we consider the rocket a mass point.
+
+Through the parachute implementation, one can predict terminal velocities based on the mass of the rocket and the characteristics of the parachute
+
 ## Environment
 
 - wind profile 
 - air density.
 
-## Motor (Hybrid)
+#### TODO:
+
+* Use an api to get wind speed profile and air density profiles.
+
+
+## Motor
 
 - Thrust Curve
 - Burn Time
 - Burnrate of solid fuel
 - Liquid Flow rate
+
+(Consider mdot = burn rate of solid fuel + liquid mass flow rate)
+(fuel_load = total fuel mass (solid + liquid if hybrid))
 
 Or:
 

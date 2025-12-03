@@ -1,6 +1,58 @@
 import numpy as np
 from .utils import *
 import math
+import matplotlib.pyplot as plt 
+
+class _SimulationResults:
+    def __init__(self, output_data):
+        self.data = np.array(output_data)
+        self.time = self.data[:, 0]
+        
+        self._raw_data = {}
+        self._interpolators = {}
+        
+        var_specs = [
+            ('x', 1, 'X Position', 'X (m)', 'blue'),
+            ('y', 2, 'Y Position', 'Y (m)', 'green'),
+            ('z', 3, 'Altitude', 'Altitude (m)', 'red'),
+            ('vx', 4, 'X Velocity', 'Vx (m/s)', 'blue'),
+            ('vy', 5, 'Y Velocity', 'Vy (m/s)', 'green'),
+            ('vz', 6, 'Z Velocity', 'Vz (m/s)', 'red'),
+            ('m', 7, 'Mass', 'Mass (kg)', 'purple'),
+        ]
+        
+        for name, col, title, ylabel, color in var_specs:
+            data = self.data[:, col]
+            self._raw_data[name] = (data, title, ylabel, color)
+            self._interpolators[name] = interp1d(
+                self.time, data, kind='cubic',
+                bounds_error=False, fill_value='extrapolate'
+            )
+    
+    def get(self, var_name, t=None):
+        if var_name not in self._raw_data:
+            raise ValueError(f"Unknown variable: {var_name}")
+        
+        if t is None:
+            data, title, ylabel, color = self._raw_data[var_name]
+            return self._plot_variable(data, title, ylabel, color)
+        else:
+            return float(self._interpolators[var_name](t))
+    
+    def __getattr__(self, name):
+        if name in self._raw_data:
+            return lambda t=None: self.get(name, t)
+        raise AttributeError(f"No attribute '{name}'")
+    
+    def _plot_variable(self, var_data, title, ylabel, color):
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(self.time, var_data, color=color, linewidth=2)
+        ax.set_xlabel('Time (s)', fontsize=12)
+        ax.set_ylabel(ylabel, fontsize=12)
+        ax.set_title(f'{title} vs Time', fontsize=14)
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()
 
 class Simulation:
     def __init__(self, environment, motor, rocket, rail_length, inclination, heading, plotter=None, e_log=False):
@@ -34,6 +86,7 @@ class Simulation:
         }
         
         self.outs = self._run()
+        self.results = _SimulationResults(self.outs)
 
     def _t_target_interpolation(self, t, t_prev, state, state_prev, t_target):
 
@@ -70,6 +123,16 @@ class Simulation:
     def _dump_linear_state(self, tl, sl, out):
         out.append([tl, *sl])
         
+    def _cmd_log(self, t, s, si):
+        print("-------------------------------------------")
+        print(f"Event {si} occurred at {t:.2f} s.")
+        print(f"{si} conditions:")
+        print(f"(x, y, z) = ({s[0]:.2f}, {s[1]:.2f}, {s[2]:.2f}) [m]")
+        print(f"(vx, vy, vz) = ({s[3]:.2f}, {s[4]:.2f}, {s[5]:.2f}) [m/s]")
+        print(f"mass = {s[6]:.2f} kg")
+        print("-------------------------------------------")
+        
+
     def _event_check(self, t, t_prev, state, state_prev, out):
 
         tl = None
@@ -121,17 +184,10 @@ class Simulation:
 
         if sl is not None and tl is not None:
             if self.e_log:
-                print("-------------------------------------------")
-                print(f"Event {state_info} occurred at {tl:.2f} s.")
-                print(f"{state_info} conditions:")
-                print(f"(x, y, z) = ({sl[0]:.2f}, {sl[1]:.2f}, {sl[2]:.2f}) [m]")
-                print(f"(vx, vy, vz) = ({sl[3]:.2f}, {sl[4]:.2f}, {sl[5]:.2f}) [m/s]")
-                print(f"mass = {sl[6]:.2f} kg")
-                print("-------------------------------------------")
+                self._cmd_log(tl, sl, state_info)
         
             self._dump_linear_state(tl, sl, out)
 
-        
     def _compute_drag(self, rho, v_mag, cd) -> float:
         return -cd * self.rocket.ref_area * 0.5 * rho * v_mag**2
 
