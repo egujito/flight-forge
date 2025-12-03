@@ -16,7 +16,6 @@ The workflow is similar to rocketpy. One needs to define the following:
 
 * Use an api to get wind speed profile and air density profiles.
 
-
 ## Motor
 
 - Thrust Curve
@@ -51,7 +50,7 @@ from flightForge import Environment, Motor, Rocket, Simulation, LivePlotter, Par
 
 env = Environment()
 
-motor = Motor("thrust(2).csv", 4.2, 9, 1.8, fuel_mass_ot="mass.csv")
+motor = Motor("thrust(2).csv", 4.2, 9, 1.8, mass_ot="mass.csv")
 
 rocket = Rocket(40.8, "MaCd.csv", 0.163)
 
