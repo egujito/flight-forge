@@ -44,7 +44,7 @@ Flight Forge is designed with a modular, object-oriented workflow (inspired by R
 1.  Environment: Define the atmosphere (wind and density profiles).
 2.  Motor: Load thrust curves (CSV) and define fuel properties (mass, burn time). Must then be added to the Rocket.
 3.  Rocket: Define the rocket diameter, ($C_d$ vs Mach from CSV) and dry mass.
-4.  Parachutes: Attach recovery devices to the Rocket object, defining the $cd_s$ ($C_d * A_p$)
+4.  Parachutes: Attach recovery devices to the Rocket object, defining the $cd_s$ ($C_d * A_p$), the lag (time until fully deployed) and trigger event (can be height in meters or an event like "apogee").
 5.  **Simulation**: combine all objects into the engine. And define the launch rail length, inclination and heading. 
 
 ⚠️ The simulation runs immediately upon initialization of this class.
