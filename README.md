@@ -14,13 +14,13 @@ This tool is optimized for the early design phase of rocketry projects, allowing
 
 Flight Forge solves the Equations of Motion (EOM) using a Runge-Kutta 4th Order (RK4) numerical integrator. This provides high accuracy for the rocket's trajectory by sampling derivatives at four points within each time step ($dt$).
 
-The simulator employs a State Vector ($Y$) representing the rocket's instantaneous condition:
+The simulator employs a State Vector ($state$) representing the rocket's instantaneous condition:
 
 $$
 Y = [r_x, r_y, r_z, v_x, v_y, v_z, m]
 $$
 
-A key feature of Flight Forge is state linearization. When an event occurs between two time steps (e.g., the rocket crosses the rail length or hits apogee), the engine does not simply take the nearest step. Instead, it calculates the exact fraction of time ($\tau$) required to hit the target condition assuming linear change between steps $t_{i}$ and $t_{i+1}$.
+A key feature of Flight Forge is state linearization. When an event occurs between two time steps (e.g., the rocket crosses the rail length or hits apogee), the engine does not simply take the nearest step. Instead, it calculates the exact fraction of time ($\tau$) required to hit the target condition assuming linear change between steps $t_{i}$ and $t_{i+1}$. This interpolated state is added to the output of the simulation, so we keep the previous step, the interpolated step and the next step stored in the output array.  
 
 * Method: `_linear_state` calculates $\tau = (target - z_0) / (z_1 - z_0)$.
 * Result: The simulation generates an "interpolated state" at the exact micro-second the event occurred, ensuring high-precision logs for deployment and stage transitions.
@@ -42,10 +42,12 @@ The engine actively monitors for critical flight phases using specific triggers:
 Flight Forge is designed with a modular, object-oriented workflow (inspired by RocketPY). You build the rocket subsystem by subsystem.
 
 1.  Environment: Define the atmosphere (wind and density profiles).
-2.  Motor: Load thrust curves (CSV) and define fuel properties (mass, burn time).
+2.  Motor: Load thrust curves (CSV) and define fuel properties (mass, burn time). Must then be added to the Rocket.
 3.  Rocket: Define the rocket diameter, ($C_d$ vs Mach from CSV) and dry mass.
-4.  Parachutes: Attach recovery devices to the Rocket object.
-5.  **Simulation**: combine all objects into the engine. **Note:** The simulation runs immediately upon initialization of this class.
+4.  Parachutes: Attach recovery devices to the Rocket object, defining the $cd_s$ ($C_d * A_p)$)
+5.  **Simulation**: combine all objects into the engine. And define the launch rail length, inclination and heading. 
+
+⚠️ The simulation runs immediately upon initialization of this class.
 
 -----
 
