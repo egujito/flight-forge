@@ -55,7 +55,7 @@ class _SimulationResults:
         plt.show()
 
 class Simulation:
-    def __init__(self, environment, motor, rocket, rail_length, inclination, heading, plotter=None, e_log=False):
+    def __init__(self, environment, rocket, motor, rail_length, inclination, heading, e_log=False, plotter=None):
 
         self.e_log = e_log
         self.env = environment
@@ -65,6 +65,7 @@ class Simulation:
         self.rail_length = rail_length
         self.inc = np.radians(inclination)
         self.heading = np.radians(heading)
+
         self.linear_params = {
             "apogee": None,
             "out_of_rail_velocity": None,
@@ -137,15 +138,16 @@ class Simulation:
 
         tl = None
         sl = None
-        s_prev = np.dot(np.array([state_prev[0], state_prev[1], state_prev[2]]), self.dir)
-        s = np.dot(np.array([state[0], state[1], state[2]]), self.dir)
         state_info = ""
 
-        if self.events["rail_departure"] is None and s_prev < self.rail_length <= s:
-            tl, sl = self._linear_state(t, t_prev, state, state_prev, 2, self.dir[2]*self.rail_length)
-            self.events["rail_departure"] = (tl, sl)
-            self.linear_params["out_of_rail_velocity"] = self._calc_speed(sl) 
-            state_info = "rail_departure"
+        if self.events["rail_departure"] is None:
+            s_prev = np.dot(np.array([state_prev[0], state_prev[1], state_prev[2]]), self.dir)
+            s = np.dot(np.array([state[0], state[1], state[2]]), self.dir)
+            if s_prev < self.rail_length <= s:
+                tl, sl = self._linear_state(t, t_prev, state, state_prev, 2, self.dir[2]*self.rail_length)
+                self.events["rail_departure"] = (tl, sl)
+                self.linear_params["out_of_rail_velocity"] = self._calc_speed(sl) 
+                state_info = "rail_departure"
 
         if self.events["apogee"] is None and self.events["rail_departure"] is not None and state_prev[5] > 0 and state[5] <= 0:
             tl, sl = self._linear_state(t, t_prev, state, state_prev, 5, 0) 
@@ -227,7 +229,7 @@ class Simulation:
         
         accel = total_force / m
     
-        return np.array([*vel, *accel, -mdot])   
+        return np.array([*vel, *accel, -mdot])  
 
 
     def _run(self, dt=0.01, t_max=200):

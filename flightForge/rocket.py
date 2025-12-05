@@ -8,6 +8,7 @@ class Rocket:
         self.dry_mass = dry_mass
         self._cd_func = func_from_csv(drag_source)
         self.parachutes = []
+        self.motor=None
 
     def e_cd(self, mach, events, z, t):
         cd_rocket = self._cd_func(mach)
@@ -22,3 +23,6 @@ class Rocket:
 
     def add_parachute(self, chute):
         self.parachutes.append(chute)
+
+    def add_motor(self, m):
+        self.motor = m
