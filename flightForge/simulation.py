@@ -19,6 +19,13 @@ class _SimulationResults:
             ('vy', 5, 'Y Velocity', 'Vy (m/s)', 'green'),
             ('vz', 6, 'Z Velocity', 'Vz (m/s)', 'red'),
             ('m', 7, 'Mass', 'Mass (kg)', 'purple'),
+            ('ax', 8, 'X Acceleration', 'Ax (m/s²)', 'cyan'),
+            ('ay', 9, 'Y Acceleration', 'Ay (m/s²)', 'cyan'),
+            ('az', 10, 'Z Acceleration', 'Az (m/s²)', 'cyan'),
+            ('acceleration', 11, 'Acceleration Mag', 'Accel (m/s²)', 'black'),
+            ('speed', 12, 'Velocity Mag', 'Speed (m/s)', 'black'),
+            ('thrust', 13, 'Thrust Force', 'Thrust (N)', 'orange'),
+            ('drag', 14, 'Drag Force', 'Drag (N)', 'magenta'),
         ]
         
         for name, col, title, ylabel, color in var_specs:
@@ -122,7 +129,8 @@ class Simulation:
         return math.sqrt(state[3]**2 + state[4]**2 + state[5]**2) 
     
     def _dump_linear_state(self, tl, sl, out):
-        out.append([tl, *sl])
+        _, extras = self._compute_physics(tl, sl)
+        out.append([tl, *sl, *extras])
         
     def _cmd_log(self, t, s, si):
         print("-------------------------------------------")
@@ -193,7 +201,7 @@ class Simulation:
     def _compute_drag(self, rho, v_mag, cd) -> float:
         return -cd * self.rocket.ref_area * 0.5 * rho * v_mag**2
 
-    def _dstate_dt(self, t, state):
+    def _compute_physics(self, t, state):
 
         x, y, z, vx, vy, vz, m = state
         pos = np.array([x, y, z])
@@ -210,11 +218,13 @@ class Simulation:
         on_rail = self.events["rail_departure"] is None
         v_dir = self.dir if on_rail else unit_norm(rel_v)
         
-        drag = compute_vec(self._compute_drag(rho, v_mag, cd), v_dir)
+        drag_mag = self._compute_drag(rho, v_mag, cd)
+        drag = compute_vec(drag_mag, v_dir)
         
         burning = self.events["burn_out"] is None
         thrust = compute_vec(self.motor.thrust_curve(t), v_dir) if burning else np.zeros(3)
-        
+        thrust_mag = np.linalg.norm(thrust)
+
         weight = m * np.array([0, 0, -9.81])
         
         total_force = thrust + drag + weight
@@ -229,9 +239,21 @@ class Simulation:
         
         accel = total_force / m
     
-        return np.array([*vel, *accel, -mdot])  
+        extras = [
+            accel[0], accel[1], accel[2],
+            np.linalg.norm(accel),
+            v_mag,
+            thrust_mag,
+            abs(drag_mag)
+        ]
+
+        return np.array([*vel, *accel, -mdot]), extras  
 
 
+    def _dstate_dt(self, t, state):
+        ds, _ = self._compute_physics(t, state)
+        return ds 
+        
     def _run(self, dt=0.01, t_max=200):
         t = 0.0
         state = np.array([0, 0, 0, 0, 0, 0, self.rocket.dry_mass + self.motor.fuel_load])
@@ -241,8 +263,10 @@ class Simulation:
         while t < t_max and self.events["impact"] is None:            
             state_prev = state.copy()
             t_prev = t
+            
+            _, extras = self._compute_physics(t_prev, state_prev)
 
-            output.append([t_prev, *state_prev])
+            output.append([t_prev, *state_prev, *extras])
   
             # RK4 step
             k1 = self._dstate_dt(t, state)
