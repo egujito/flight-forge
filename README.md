@@ -117,15 +117,18 @@ motor = Motor("curves/thrust(2).csv", 4.2, 9, 1.8, mass_ot="curves/mass.csv")
 # (Dry Mass, Cd vs Mach CSV, Diameter)
 rocket = Rocket(40.8, "curves/MaCd.csv", 0.163)
 
-# 4. Add Recovery System
+# 4. Add motor to rocket
+rocket.add_motor(motor)
+
+# 5. Add Recovery System
 rocket.add_parachute(Parachute("drogue", 0.7354, 1, "apogee"))
 rocket.add_parachute(Parachute("main", 13.8991, 1, 450)) # Deploys at 450m
 
-# 5. Run Simulation
+# 6. Run Simulation
 # (env, motor, rocket, rail_len, inclination, heading, logging)
-sim = Simulation(env, motor, rocket, 12, 84, 144, e_log=True)
+sim = Simulation(env, rocket, 12, 84, 144, e_log=True)
 
-# 6. Analyze Results
+# 7. Analyze Results
 sim.results.z()       # Plots Altitude vs Time
 print(sim.results.vz(10.5)) # Prints velocity at t=10.5s
 ```

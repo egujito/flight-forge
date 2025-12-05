@@ -55,12 +55,12 @@ class _SimulationResults:
         plt.show()
 
 class Simulation:
-    def __init__(self, environment, rocket, motor, rail_length, inclination, heading, e_log=False, plotter=None):
+    def __init__(self, environment, rocket, rail_length, inclination, heading, e_log=False, plotter=None):
 
         self.e_log = e_log
         self.env = environment
-        self.motor = motor
         self.rocket = rocket
+        self.motor = self.rocket.motor
         self.plotter = plotter
         self.rail_length = rail_length
         self.inc = np.radians(inclination)
