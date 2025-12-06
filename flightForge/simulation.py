@@ -76,6 +76,10 @@ class Simulation:
         self.linear_params = {
             "apogee": None,
             "out_of_rail_velocity": None,
+            "peak_thrust": None,
+            "out_of_rail_time": None,
+            "apogee_time": None,
+            "impact_time": None,
         }
 
         # unit vector representing the direction of the launch
@@ -229,7 +233,8 @@ class Simulation:
         
         total_force = thrust + drag + weight
         
-        mdot = self.motor.fuel_mdot
+        mdot = self.motor.mdot(t)
+
         if not burning:
             mdot = 0
         
@@ -256,7 +261,7 @@ class Simulation:
         
     def _run(self, dt=0.01, t_max=200):
         t = 0.0
-        state = np.array([0, 0, 0, 0, 0, 0, self.rocket.dry_mass + self.motor.fuel_load])
+        state = np.array([0, 0, 0, 0, 0, 0, self.rocket.dry_mass + self.motor.ox_mass + self.motor.grain_mass])
         output = []
 
         # til max iter or impact
