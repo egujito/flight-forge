@@ -25,6 +25,25 @@ A key feature of Flight Forge is state linearization. When an event occurs betwe
 * Method: `_linear_state` calculates $\tau = (target - z_0) / (z_1 - z_0)$.
 * Result: The simulation generates an "interpolated state" at the exact micro-second the event occurred, ensuring high-precision logs for deployment and stage transitions.
 
+### **Propulsion**
+
+You can define if the motor is hybrid or solid simply by adjusting the parameter `ox_mass`. The `ox_mass` parameter should be 0 for solid motors (default option). If it is not 0, the parameter `ox_mdot` should be adjusted. This represents the oxidizer flow rate to the combustion chamber. 
+
+The instantaneous mass change rate (solid + liquid (if hybrid)) is calculated by the diving the thrust at that time by the effective exhaust velocity:
+
+$$
+\dot{m_t} = \frac{Thrust(t)}{v_e} [kg/s]
+$$
+
+Where:
+$$
+v_e = \frac{I_t}{M_p} [m/s]
+$$
+
+$$
+M_p = m_l + m_s
+$$
+
 ### **Event Detection**
 
 The engine actively monitors for critical flight phases using specific triggers:

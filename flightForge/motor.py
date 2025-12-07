@@ -10,7 +10,7 @@ class Motor:
         self.ox_mass = ox_mass
         self.grain_mass = grain_mass
         self.ve = 0
-        self.isp = 0
+        self.i_tot = 0
         self.type = "Solid"
 
         if ox_mass != 0:
@@ -32,19 +32,18 @@ class Motor:
         print(f"-------{self.type.capitalize()} MOTOR INFO --------")
         print(f"Oxidizer Mass: {self.ox_mass} kg")
         print(f"Grain Mass:    {self.grain_mass} kg")
-        print(f"Total Impulse: {self.isp:.2f} Ns")
+        print(f"Total Impulse: {self.i_tot:.2f} Ns")
         print(f"Eff. Exhaust Velocity (Ve): {self.ve:.2f} m/s")
         print("------------------------------------")
 
     def _compute_exhaust_velocity(self, ts):
         x, y = func_from_csv(ts, get_arrs=True)
-        self.isp = np.trapz(y, x)
-        self.ve = self.isp / (self.ox_mass + self.grain_mass)
+        self.i_tot = np.trapz(y, x)
+        self.ve = self.i_tot / (self.ox_mass + self.grain_mass)
 
-        
     def _assert_flow_rates(self):
         if self.burn_time*self.ox_mdot > self.ox_mass:
-            raise Exception(f"!Tank will be underfilled. burn_time * fuel_mdot = {self.burn_time*self.ox_mdot} kg fuel_load = {self.ox_mass} kg")
+            raise Exception(f"!Tank will be underfilled. burn_time * ox_mdot = {self.burn_time*self.ox_mdot} kg ox_mass = {self.ox_mass} kg")
 
     def thrust(self, t):
         return self.thrust_curve(t)
