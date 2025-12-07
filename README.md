@@ -36,9 +36,12 @@ $$
 $$
 
 Where:
+
 $$
 v_e = \frac{I_t}{M_p} [m/s]
 $$
+
+And:
 
 $$
 M_p = m_l + m_s
