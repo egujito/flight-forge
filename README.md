@@ -103,7 +103,9 @@ $$
 Forces considered include:
 
   * $\vec{F}_{thrust} = ||F(t)|| \cdot \hat{v}$
+
   * $\vec{F}_{drag} = -\frac{1}{2} \rho v^2 C_d A_{ref} \cdot \hat{v}$
+
   * $\vec{F}_{g} = m \vec{g}$
 
 #### Event Detection & Linearization
