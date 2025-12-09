@@ -3,6 +3,7 @@ import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 
 
+#Slow performance, the ideal solution is to use SimulationResults plots
 class LivePlotter:
     def __init__(self, update_interval=1000):
         self.update_interval = update_interval

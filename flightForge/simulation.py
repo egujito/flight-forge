@@ -94,6 +94,33 @@ class _SimulationResults:
         plt.tight_layout() 
         plt.show()
 
+    def trajectory_3d(self):
+
+        x_data, _, x_label, _ = self._raw_data['x']
+        y_data, _, y_label, _ = self._raw_data['y']
+        z_data, _, z_label, _ = self._raw_data['z']
+
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+
+        ax.plot(x_data, y_data, z_data, label='Trajectory', linewidth=2)
+        
+        ax.scatter(x_data[0], y_data[0], z_data[0], color='green', marker='o', s=50, label='Launch Point')
+        ax.scatter(x_data[-1], y_data[-1], z_data[-1], color='red', marker='x', s=50, label='Impact Point')
+
+        ax.set_xlabel(x_label, fontsize=12)
+        ax.set_ylabel(y_label, fontsize=12)
+        ax.set_zlabel(z_label, fontsize=12)
+        ax.set_title('3D Trajectory', fontsize=14)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        ax.set_zlim(zmin=0)
+
+        ax.view_init(elev=20, azim=45)
+        
+        plt.tight_layout()
+        plt.show()
+
     def plot_vs(self, x_name, y_name):
 
         if x_name not in self._raw_data or y_name not in self._raw_data:
@@ -233,24 +260,7 @@ class Simulation:
             self.events["impact"] = (tl, sl)
             state_info = "impact"
 
-        for p in self.rocket.parachutes:
-            active = False
-            if p.deploy_t is None:
-                if p.trigger == "apogee" and self.events["apogee"] is not None:
-                    p.deploy_t = t
-                    active = True
-                
-                elif isinstance(p.trigger, (int, float)):
-                    if state[2] <= p.trigger and state_prev[2] > p.trigger and state[5] < 0:
-                        p.deploy_t = t
-                        active = True
-                    
-            if self.e_log and not p.logged and active:
-                pt = t
-                if tl is not None:
-                    pt = tl
-                p.logged = True
-                print(f"{p.name} parachute deployed at: {pt:.2f} [s]")
+        
 
         if sl is not None and tl is not None:
             if self.e_log:
@@ -258,6 +268,25 @@ class Simulation:
         
             self._dump_linear_state(tl, sl, out)
 
+        for p in self.rocket.parachutes:
+                    active = False
+                    if p.deploy_t is None:
+                        if p.trigger == "apogee" and self.events["apogee"] is not None:
+                            p.deploy_t = t
+                            active = True
+                        
+                        elif isinstance(p.trigger, (int, float)):
+                            if state[2] <= p.trigger and state_prev[2] > p.trigger and state[5] < 0:
+                                p.deploy_t = t
+                                active = True
+                            
+                    if self.e_log and not p.logged and active:
+                        pt = t
+                        if tl is not None:
+                            pt = tl
+                        p.logged = True
+                        print(f"{p.name} parachute deployed at: {pt:.2f} [s]")
+                    
     def _compute_drag(self, rho, v_mag, cd) -> float:
         return -cd * self.rocket.ref_area * 0.5 * rho * v_mag**2
 

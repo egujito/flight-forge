@@ -66,7 +66,7 @@ $$
 \dot{m}_{grain}(t) = \dot{m}_{tot}(t) - \dot{m}_{ox}
 $$
 
-> Note on Negative Grain Flow: In hybrid configurations, if the thrust $F(t)$ drops significantly (e.g., during startup or shutdown) while the constant oxidizer flow $\dot{m}_{ox}$ continues, the calculated $\dot{m}_{grain}$ may become negative. This physical interpretation implies that unburnt oxidizer is accumulating in the chamber or that the simplified constant $v_e$ model assumes a higher efficiency than is occurring at that moment.
+Note on Negative Grain Flow: In hybrid configurations, if the thrust $F(t)$ drops significantly (e.g., during startup or shutdown) while the constant oxidizer flow $\dot{m}_{ox}$ continues, the calculated $\dot{m}_{grain}$ may become negative. This physical interpretation implies that unburnt oxidizer is accumulating in the chamber or that the simplified constant $v_e$ model assumes a higher efficiency than is occurring at that moment.
 
 -----
 
@@ -78,7 +78,7 @@ The Rocket class defines the vehicle's physical properties, including:
   * Drag Coefficient ($C_d$): Defined as a function of Mach number via CSV input.
   * Diameter: To calculate reference area.
 
-> The flight simulation runs as soon as the class is initialized.
+The flight simulation runs as soon as the class is initialized.
 
 -----
 
@@ -126,29 +126,7 @@ $$
 
 -----
 
-### Logging & Outputs
-
-The simulation provides detailed feedback through the console if e\_log=True. This includes:
-
-  * Environment Info: Coordinates, model used, and surface wind vector.
-  * Motor Info: Propellant breakdown and performance metrics ($I_{tot}$, $v_e$).
-  * Flight Events: Precise timestamps and state vectors for every critical flight phase (Rail Departure, Apogee, Impact).
-
-
-```
--------Hybrid MOTOR INFO --------
-Oxidizer Mass: 7.33 kg
-Grain Mass:    3 kg
-Total Impulse: 14543.04 Ns
-Eff. Exhaust Velocity (Ve): 1407.84 m/s
-------------------------------------
-Event rail_departure occurred at 0.32 s.
-...
-Event apogee occurred at 14.50 s.
-...
-```
-
-#### Jupyter Notebook Integration
+#### Outputs
 
 Flight Forge is designed for seamless integration with Jupyter Notebooks. The sim.results object provides a dynamic interface to access and plot simulation data.
 
@@ -172,7 +150,146 @@ vel_at_5 = sim.results.vz(5.0)
 sim.results.plot_vs('x', 'z') # Plot trajectory (Z vs X)
 ```
 
-### Example Usage: (main.py)
+### Example Usage: (Jupyter Notebook)
+
+```python
+from flightForge import Environment, Motor, Rocket, Simulation, LivePlotter, Parachute
+from dotenv import load_dotenv
+import os
+import datetime
+```
+
+
+```python
+load_dotenv()
+api_key = os.environ.get("API_KEY")
+env = Environment(e_log=True)
+tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+date_info = (tomorrow.day, tomorrow.month, tomorrow.year)
+env.set_model(api_key=api_key, model="iconEu", lat=39.389700, lon=-8.288964, date=date_info)
+```
+
+    -------ENVIRONMENT INFO --------
+    Coordinates:   39.3897, -8.288964
+    Model Used:    iconEu
+    Surface Wind:  U=-2.73 m/s, V=1.56 m/s
+                   Mag=3.14 m/s
+    --------------------------------
+
+
+![png](example_files/example_1_1.png)
+    
+```python
+motor = Motor("curves/thrust(2).csv", burn_time=4.2, ox_mass=7.33, ox_mdot=1.5, grain_mass=3, e_log=True)
+```
+
+    -------Hybrid MOTOR INFO --------
+    Oxidizer Mass: 7.33 kg
+    Grain Mass:    3 kg
+    Total Impulse: 14543.04 Ns
+    Eff. Exhaust Velocity (Ve): 1407.84 m/s
+    ------------------------------------
+
+
+
+```python
+rocket = Rocket(40.8, "curves/MaCd.csv", 0.163)
+rocket.add_parachute(Parachute("drogue", 0.7354, 1, "apogee"))
+rocket.add_parachute(Parachute("main", 13.8991, 1, 450))
+rocket.add_motor(motor)
+```
+
+
+```python
+sim = Simulation(env, rocket, 12, 84, 144, e_log=True) 
+```
+
+    -------------------------------------------
+    Event rail_departure occurred at 0.78 s.
+    rail_departure conditions:
+    (x, y, z) = (-1.01, 0.74, 11.93) [m]
+    (vx, vy, vz) = (-3.11, 2.26, 36.53) [m/s]
+    mass = 49.54 kg
+    -------------------------------------------
+    -------------------------------------------
+    Event burn_out occurred at 4.20 s.
+    burn_out conditions:
+    (x, y, z) = (-72.91, 73.99, 498.92) [m]
+    (vx, vy, vz) = (-40.05, 42.19, 254.16) [m/s]
+    mass = 41.01 kg
+    -------------------------------------------
+    -------------------------------------------
+    Event apogee occurred at 26.15 s.
+    apogee conditions:
+    (x, y, z) = (-811.45, 857.95, 3125.65) [m]
+    (vx, vy, vz) = (-29.19, 31.14, 0.00) [m/s]
+    mass = 40.99 kg
+    -------------------------------------------
+    drogue parachute deployed at: 26.15 [s]
+    main parachute deployed at: 111.70 [s]
+    -------------------------------------------
+    Event impact occurred at 176.61 s.
+    impact conditions:
+    (x, y, z) = (-685.50, 724.15, 0.00) [m]
+    (vx, vy, vz) = (1.56, -2.73, -6.69) [m/s]
+    mass = 40.99 kg
+    -------------------------------------------
+
+
+```python
+sim.results.trajectory_3d()
+```
+
+![](example_files/example_5_0.png)
+
+```python
+sim.results.z()
+```
+
+```python
+sim.results.vz()
+```
+
+```python
+sim.results.m()
+```
+
+
+```python
+sim.results.total_mdot()
+```
+
+```python
+sim.results.thrust()
+```
+
+```python
+sim.results.drag()
+```
+
+More features:
+
+```python
+sim.results.x(),
+            .y()
+            .z()
+            .vx()
+            .vy()
+            .vz()
+            .speed() (#magnitude)
+            .ax
+            .ay
+            .az
+            .acceleration (#magnitude)
+            .m()
+            .thrust()
+            .drag()
+            .grain_mdot()
+            .total_mdot()
+
+```
+
+Or in a python script (main.py)
 
 ```python
 from flightForge import Environment, Motor, Rocket, Simulation, LivePlotter, Parachute
