@@ -1,158 +1,184 @@
-# **🚀 Flight Forge**
+## 🚀 Flight Forge: 3DOF Rocket Flight Simulator
 
 ![](img/3dof-example.png)
 
-### **3DOF Rocket Flight Simulator**
+Flight Forge is a Python-based open-source library designed for simulating the flight dynamics of high-power rockets. It utilizes a 3 Degrees of Freedom (3DOF) physics engine to simulate translational motion ($x, y, z$) while treating the rocket as a variable-mass point object.
 
-**Flight Forge** is a Python-based open-source library designed for simulating the flight dynamics of high-power rockets. It utilizes a 3 Degrees of Freedom (3DOF) physics engine to simulate translational motion ($x, y, z$) while treating the rocket as a variable-mass point object.
+-----
 
-This tool is optimized for the early design phase of rocketry projects, allowing the prediction of the apogee, velocity profiles, and recovery events before inertia tensors are defined.
+### Why 3DOF?
 
-## **Core Concepts**
+In the early stages of rocket design, detailed inertia tensors are often unknown. A 3DOF simulator is crucial for rapidly iterating on:
 
-### **Physics & Linearization**
+  * Apogee prediction: Estimating peak altitude based on mass and drag.
+  * Velocity profiling: Ensuring the rocket leaves the launch rail at a safe velocity.
+  * Recovery planning: Predicting terminal velocities for parachutes with set configuration.
 
-Flight Forge solves the Equations of Motion (EOM) using a Runge-Kutta 4th Order (RK4) numerical integrator. This provides high accuracy for the rocket's trajectory by sampling derivatives at four points within each time step ($dt$).
+-----
 
-The simulator employs a State Vector ($state$) representing the rocket's instantaneous condition:
+### Core Classes
 
+The framework is built around four main interacting classes that define the simulation components.
+
+#### 1\. Environment
+
+The Environment class handles atmospheric conditions, including air density and wind profiles. It integrates directly with the Windy.com API to fetch real-world forecast data for specific locations and dates.
+
+  * Custom Models: You can define a specific location (lat, lon), model (e.g., 'gfs'), and even a specific date to retrieve historical or forecast weather data.
+  * Profiles: It generates altitude-dependent profiles for density ($\rho$) and wind vectors ($\vec{u}, \vec{v}$).
+
+-----
+
+#### 2\. Motor
+
+The Motor class models the propulsion system, supporting both Solid and Hybrid engines. It handles the math to determine mass depletion in the system.
+
+##### Performance Metrics
+
+The engine's performance is derived from the provided thrust curve and propellant mass:
+
+  * Total Impulse ($I_{tot}$): Calculated by integrating the thrust curve over time.
+    $$
+    I_{tot} = \int_{0}^{t_{burn}} F(t) dt
+    $$
+  * Effective Exhaust Velocity ($v_e$): The average velocity of exhaust gases, derived from the total impulse and total propellant mass ($M_p = m_{ox} + m_{grain}$).
+    $$
+    v_e = \frac{I_{tot}}{M_p}
+    $$
+  * Total Mass Flow Rate ($\dot{m}_{tot}$): The instantaneous rate at which mass is ejected from the rocket, assumed proportional to thrust for a constant $v_e$.
+    $$
+    \dot{m}_{tot}(t) = \frac{F(t)}{v_e}
+    $$
+
+##### Hybrid vs. Solid Propulsion
+
+The system distinguishes between motor types based on the oxidizer mass (ox\_mass):
+
+  * Solid Motors: ox\_mass = 0. The entire flow rate comes from the solid grain.
+  * Hybrid Motors: ox\_mass \> 0. You must define a constant oxidizer flow rate (ox\_mdot). The system derives the solid grain regression rate ($\dot{m}_{grain}$) by subtracting the oxidizer flow from the total flow required to match the thrust curve.
+    $$\dot{m}_{grain}(t) = \dot{m}_{tot}(t) - \dot{m}_{ox}$$
+
+> Note on Negative Grain Flow: In hybrid configurations, if the thrust $F(t)$ drops significantly (e.g., during startup or shutdown) while the constant oxidizer flow $\dot{m}_{ox}$ continues, the calculated $\dot{m}_{grain}$ may become negative. This physical interpretation implies that unburnt oxidizer is accumulating in the chamber or that the simplified constant $v_e$ model assumes a higher efficiency than is occurring at that moment.
+
+-----
+
+#### 3\. Rocket
+
+The Rocket class defines the vehicle's physical properties, including:
+
+  * Dry Mass: Mass of the rocket without propellant.
+  * Drag Coefficient ($C_d$): Defined as a function of Mach number via CSV input.
+  * Diameter: To calculate reference area.
+
+> The flight simulation runs as soon as the class is initialized.
+
+-----
+
+#### 4\. Simulation
+
+The Simulation class orchestrates the interaction between the Environment, Motor, and Rocket. It initializes the physics engine, sets the launch rail parameters (length, inclination, heading), and executes the time-stepping loop.
+
+-----
+
+### Core Physics & Simulation Engine
+
+#### Equations of Motion (EOM)
+
+Flight Forge solves the translational EOM using a Runge-Kutta 4th Order (RK4) numerical integrator. This method samples the state derivatives at four points within each time step ($dt$) to ensure high accuracy.
+
+The state vector is defined as:
 $$
 Y = [r_x, r_y, r_z, v_x, v_y, v_z, m]
 $$
+Forces considered include:
 
-A key feature of Flight Forge is state linearization. When an event occurs between two time steps (e.g., the rocket crosses the rail length or hits apogee), the engine does not simply take the nearest step. Instead, it calculates the exact fraction of time ($\tau$) required to hit the target condition assuming linear change between steps $t_{i}$ and $t_{i+1}$. This interpolated state is added to the output of the simulation, so we keep the previous step, the interpolated step and the next step stored in the output array.  
+  * $\vec{F}_{thrust} = ||F(t)|| \cdot \hat{v}$
+  * $\vec{F}_{drag} = -\frac{1}{2} \rho v^2 C_d A_{ref} \cdot \hat{v}$.
+  * $\vec{F}_{g} = m \vec{g}$.
 
-* Method: `_linear_state` calculates $\tau = (target - z_0) / (z_1 - z_0)$.
-* Result: The simulation generates an "interpolated state" at the exact micro-second the event occurred, ensuring high-precision logs for deployment and stage transitions.
+#### Event Detection & Linearization
 
-### **Propulsion**
+The simulator actively monitors for discrete events such as Rail Departure, Apogee, and Burnout.
 
-You can define if the motor is hybrid or solid simply by adjusting the parameter `ox_mass`. The `ox_mass` parameter should be 0 for solid motors (default option). If it is not 0, the parameter `ox_mdot` should be adjusted. This represents the oxidizer flow rate to the combustion chamber. 
-
-The instantaneous mass change rate (solid + liquid (if hybrid)) is calculated by the diving the thrust at that time by the effective exhaust velocity:
-
-$$
-\dot{m_t} = \frac{Thrust(t)}{v_e} [kg/s]
-$$
-
-Where:
-
-$$
-v_e = \frac{I_t}{M_p} [m/s]
-$$
-
-And:
-
-$$
-M_p = m_l + m_s
-$$
-
-### **Event Detection**
-
-The engine actively monitors for critical flight phases using specific triggers:
-
-* Rail Departure: interpolation of position vector along the launch guide.
-* Burnout: Time-based interpolation matching the motor's burn duration.
-* Apogee: Detected when vertical velocity ($v_z$) crosses zero (positive to negative).
-* Impact: Detected when altitude ($z$) returns to zero after burnout.
-* Parachute Deployment: Triggered by specific events ("apogee") or altitude thresholds (e.g., 450m).
+To maintain precision independent of the time step size ($dt$), the engine employs State Linearization. When an event is detected between steps $t_i$ and $t_{i+1}$ (e.g., $v_z$ changes from positive to negative), the engine calculates the exact time fraction $\tau$ where the event occurred:
+$$\tau = \frac{Target - Z_0}{Z_1 - Z_0}$$
+An interpolated state $S_{event}$ is then generated and inserted into the output log:
+$$S_{event} = S_{prev} + \tau (S_{curr} - S_{prev})$$
 
 -----
 
-## **Workflow**
+### Logging & Outputs
 
-Flight Forge is designed with a modular, object-oriented workflow (inspired by RocketPY). You build the rocket subsystem by subsystem.
+The simulation provides detailed feedback through the console if e\_log=True. This includes:
 
-1.  Environment: Define the atmosphere (wind and density profiles).
-2.  Motor: Load thrust curves (CSV) and define fuel properties (mass, burn time). Must then be added to the Rocket.
-3.  Rocket: Define the rocket diameter, ($C_d$ vs Mach from CSV) and dry mass.
-4.  Parachutes: Attach recovery devices to the Rocket object, defining the $cd_s$ ($C_d * A_p$), the lag (time until fully deployed) and trigger event (can be height in meters or an event like "apogee").
-5.  **Simulation**: combine all objects into the engine. And define the launch rail length, inclination and heading. 
+  * Environment Info: Coordinates, model used, and surface wind vector.
+  * Motor Info: Propellant breakdown and performance metrics ($I_{tot}$, $v_e$).
+  * Flight Events: Precise timestamps and state vectors for every critical flight phase (Rail Departure, Apogee, Impact).
 
-⚠️ The simulation runs immediately upon initialization of this class.
 
------
+```
+-------Hybrid MOTOR INFO --------
+Oxidizer Mass: 7.33 kg
+Grain Mass:    3 kg
+Total Impulse: 14543.04 Ns
+Eff. Exhaust Velocity (Ve): 1407.84 m/s
+------------------------------------
+Event rail_departure occurred at 0.32 s.
+...
+Event apogee occurred at 14.50 s.
+...
+```
 
-🔍 Flight Forge is built to integrate seamlessly with Jupyter Notebooks, offering two distinct ways to visualize data.
+#### Jupyter Notebook Integration
 
-### **1. Live Plotting**
+Flight Forge is designed for seamless integration with Jupyter Notebooks. The sim.results object provides a dynamic interface to access and plot simulation data.
 
-Useful for demonstrations or debugging long simulations. You can watch the flight in real-time as the math executes.
-
-* How to use: Pass a `LivePlotter` instance to the `Simulation` constructor.
-* Behavior: Opens interactive `matplotlib` windows (3D Trajectory, Altitude, Velocity) that update every $N$ iterations.
+  * Quick Plotting: Simply call the variable attribute as a function.
 
 ```python
-from flightForge import LivePlotter
-# Updates plot every 10 steps
-sim = Simulation(..., plotter=LivePlotter(update_interval=1000))
+sim.results.vz()  # Plots vertical velocity vs time
+sim.results.z()   # Plots altitude vs time
 ```
 
-⚠️ Should only be used in a .py script. Do not use live plotting on a jupyter notebook.
+  * Data Interpolation: Retrieve precise values at any arbitrary time $t$, even if it wasn't a simulation step.
 
-### **2. Post-Flight Analysis (Static Plotting)**
-
-Once the simulation completes, the results are stored in `sim.results`. This object uses a dynamic access system that allows you to either plot a variable or get its value at a specific time using the same attribute name.
-
-The available variables are: `x`, `y`, `z` (altitude), `vx`, `vy`, `vz`, `m` (mass).
-
-  * Generate a Plot: Call the attribute as a function with no arguments.
-
-    ```python
-    # Plots Vertical Velocity (Vz) vs Time
-    sim.results.vz()
-    ```
-
-  * Get Specific Value: Call the attribute with a time argument. The system uses cubic interpolation to give you the precise value at that time, even if it wasn't an exact simulation step.
-
-    ```python
-    # Returns the vertical velocity exactly at t=120.0 seconds
-    v_ex = sim.results.vz(120)
-    print(v_ex) # returns x m/s
-    ```
-
------
-
-## **Installation**
-
-Clone the repository and install dependencies (requires `numpy`, `scipy`, `matplotlib`).
-
-```bash
-git clone [https://github.com/egujito/flight-forge.git](https://github.com/egujito/flight-forge.git)
-cd flight-forge
-pip install numpy matplotlib scipy
+```python
+# Get velocity exactly at t=5.0s
+vel_at_5 = sim.results.vz(5.0)
 ```
 
------
+  * Phase Plotting: Plot one variable against another.
 
-## **Example Usage**
+```python
+sim.results.plot_vs('x', 'z') # Plot trajectory (Z vs X)
+```
+
+### Example Usage: (main.py)
 
 ```python
 from flightForge import Environment, Motor, Rocket, Simulation, LivePlotter, Parachute
+from dotenv import load_dotenv
+import os
+import datetime
 
-# 1. Setup Environment
+load_dotenv()
+
+api_key = os.environ.get("API_KEY")
+
 env = Environment()
+tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+date_info = (tomorrow.day, tomorrow.month, tomorrow.year)
+env.set_model(api_key=api_key, model="gfs", lat=39.389700, lon=-8.288964, date=date_info)
 
-# 2. Define Motor
-# (Thrust CSV, Fuel Mass, Burn Time, Flow Rate, Mass Curve CSV (Optional))
-motor = Motor("curves/thrust(2).csv", 4.2, 9, 1.8, mass_ot="curves/mass.csv")
+motor = Motor("curves/thrust(2).csv", 4.2, ox_mass=7.33, ox_mdot=1.5, grain_mass=3)
 
-# 3. Define Rocket
-# (Dry Mass, Cd vs Mach CSV, Diameter)
 rocket = Rocket(40.8, "curves/MaCd.csv", 0.163)
-
-# 4. Add motor to rocket
 rocket.add_motor(motor)
-
-# 5. Add Recovery System
 rocket.add_parachute(Parachute("drogue", 0.7354, 1, "apogee"))
-rocket.add_parachute(Parachute("main", 13.8991, 1, 450)) # Deploys at 450m
+rocket.add_parachute(Parachute("main", 13.8991, 1, 450))
 
-# 6. Run Simulation
-# (env, motor, rocket, rail_len, inclination, heading, logging)
-sim = Simulation(env, rocket, 12, 84, 144, e_log=True)
-
-# 7. Analyze Results
-sim.results.z()       # Plots Altitude vs Time
-print(sim.results.vz(10.5)) # Prints velocity at t=10.5s
+# sim = Simulation(env, rocket, 12, 84, 144, e_log=True, plotter=LivePlotter()) # Add plotter=LivePlotter(update_interval=x) to see live plotting
+sim = Simulation(env, rocket, 12, 84, 144, e_log=True) # Add plotter=LivePlotter(update_interval=x) to see live plotting
+#sim.results.z()
+#sim.results.vz()
 ```
