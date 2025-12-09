@@ -37,22 +37,22 @@ The Motor class models the propulsion system, supporting both Solid and Hybrid e
 
 The engine's performance is derived from the provided thrust curve and propellant mass:
 
-  * Total Impulse ($I_{tot}$): Calculated by integrating the thrust curve over time.
+  * Total Impulse ($I_{total}$): Calculated by integrating the thrust curve over time.
 
 $$
-I_{tot} = \int_{0}^{t_{burn}} F(t) dt
+I_{total} = \int_{0}^{t_{burn}} Thrust(t) dt
 $$
 
   * Effective Exhaust Velocity ($v_e$): The average velocity of exhaust gases, derived from the total impulse and total propellant mass ($M_p = m_{ox} + m_{grain}$).
 
 $$
-v_e = \frac{I_{tot}}{M_p}
+v_e = \frac{I_{total}}{M_p}
 $$
 
   * Total Mass Flow Rate ($\dot{m}_{tot}$): The instantaneous rate at which mass is ejected from the rocket, assumed proportional to thrust for a constant $v_e$.
 
 $$
-\dot{m}_{tot}(t) = \frac{F(t)}{v_e}
+\dot{m}_{tot}(t) = \frac{Thrust(t)}{v_e}
 $$
 
 ##### Hybrid vs. Solid Propulsion
@@ -102,11 +102,11 @@ $$
 
 Forces considered include:
 
-  * $\vec{F}_{thrust} = ||F(t)|| \cdot \hat{v}$
+  * $\vec{F}_{thrust}$
 
-  * $\vec{F}_{drag} = -\frac{1}{2} \rho v^2 C_d A_{ref} \cdot \hat{v}$
+  * $\vec{F}_{drag}$ 
 
-  * $\vec{F}_{g} = m \vec{g}$
+  * $\vec{F}_{gravity}$
 
 #### Event Detection & Linearization
 
