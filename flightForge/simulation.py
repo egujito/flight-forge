@@ -3,10 +3,18 @@ from .utils import *
 import math
 import matplotlib.pyplot as plt 
 
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
+
 class _SimulationResults:
     def __init__(self, output_data):
         self.data = np.array(output_data)
-        self.time = self.data[:, 0]
+        # Handle empty data case
+        if self.data.size == 0:
+            self.time = np.array([])
+        else:
+            self.time = self.data[:, 0]
         
         self._raw_data = {}
         self._interpolators = {}
@@ -26,15 +34,19 @@ class _SimulationResults:
             ('speed', 12, 'Velocity Mag', 'Speed (m/s)', 'black'),
             ('thrust', 13, 'Thrust Force', 'Thrust (N)', 'orange'),
             ('drag', 14, 'Drag Force', 'Drag (N)', 'magenta'),
+            ('total_mdot', 15, 'Total Mdot', 'Total Mdot (kg/s)', 'red'),
+            ('grain_mdot', 16, 'Grain Mdot', 'Grain Mdot (kg/s)', 'red'),
         ]
         
         for name, col, title, ylabel, color in var_specs:
-            data = self.data[:, col]
-            self._raw_data[name] = (data, title, ylabel, color)
-            self._interpolators[name] = interp1d(
-                self.time, data, kind='cubic',
-                bounds_error=False, fill_value='extrapolate'
-            )
+            if col < self.data.shape[1]:
+                data = self.data[:, col]
+                self._raw_data[name] = (data, title, ylabel, color)
+                if len(self.time) > 1:
+                    self._interpolators[name] = interp1d(
+                        self.time, data, kind='cubic',
+                        bounds_error=False, fill_value='extrapolate'
+                    )
     
     def get(self, var_name, t=None):
         if var_name not in self._raw_data:
@@ -52,11 +64,55 @@ class _SimulationResults:
         raise AttributeError(f"No attribute '{name}'")
     
     def _plot_variable(self, var_data, title, ylabel, color):
+        
+        threshold = 1e-4
+        
+        significant_indices = np.where(np.abs(var_data) > threshold)[0]
+        
+        t_plot = self.time
+        y_plot = var_data
+
+        if len(significant_indices) > 0:
+            last_idx = significant_indices[-1]
+            
+            if last_idx < len(var_data) - 1:
+                padding = 5
+                cut_idx = min(last_idx + padding + 1, len(var_data))
+                
+                t_plot = self.time[:cut_idx]
+                y_plot = var_data[:cut_idx]
+        
+        
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(self.time, var_data, color=color, linewidth=2)
+        
+        ax.plot(t_plot, y_plot, color=color, linewidth=2)
+        
         ax.set_xlabel('Time (s)', fontsize=12)
         ax.set_ylabel(ylabel, fontsize=12)
         ax.set_title(f'{title} vs Time', fontsize=14)
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout() 
+        plt.show()
+
+    def plot_vs(self, x_name, y_name):
+
+        if x_name not in self._raw_data or y_name not in self._raw_data:
+            raise ValueError(f"Variables '{x_name}' or '{y_name}' not found.")
+
+        x_data, x_title, x_label, _ = self._raw_data[x_name]
+        y_data, y_title, y_label, y_color = self._raw_data[y_name]
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        ax.plot(x_data, y_data, color=y_color, linewidth=2)
+        
+        ax.set_xlabel(x_label, fontsize=12)
+        ax.set_ylabel(y_label, fontsize=12)
+        ax.set_title(f'{y_title} vs {x_title}', fontsize=14)
+        
+        if x_name in ['x', 'y'] and y_name in ['x', 'y', 'z']:
+            ax.set_aspect('equal', 'box')
+
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
@@ -138,7 +194,7 @@ class Simulation:
         
     def _cmd_log(self, t, s, si):
         print("-------------------------------------------")
-        print(f"Event {si} occurred at {t:.2f} s.")
+        print(f"Event " + bcolors.BOLD + bcolors.OKGREEN + bcolors.UNDERLINE + f"{si}" + bcolors.ENDC + f" occurred at {t:.2f} s.")
         print(f"{si} conditions:")
         print(f"(x, y, z) = ({s[0]:.2f}, {s[1]:.2f}, {s[2]:.2f}) [m]")
         print(f"(vx, vy, vz) = ({s[3]:.2f}, {s[4]:.2f}, {s[5]:.2f}) [m/s]")
@@ -233,23 +289,24 @@ class Simulation:
         
         total_force = thrust + drag + weight
         
-        mdot = self.motor.mdot(t)
+        mdot, g_mdot = self.motor.mdot(t, burning)
 
-        if not burning:
-            mdot = 0
-        
+        if self.motor.type == "Solid":
+            mdot=g_mdot
+
         if on_rail:
             vel = np.dot(vel, self.dir) * self.dir
             total_force = np.dot(total_force, self.dir) * self.dir
         
         accel = total_force / m
-    
         extras = [
             accel[0], accel[1], accel[2],
             np.linalg.norm(accel),
             v_mag,
             thrust_mag,
-            abs(drag_mag)
+            abs(drag_mag),
+            mdot,
+            g_mdot,
         ]
 
         return np.array([*vel, *accel, -mdot]), extras  

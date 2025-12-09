@@ -1,4 +1,4 @@
-from .utils import func_from_csv
+from .utils import func_from_csv, bcolors
 import numpy as np
 
 class Motor:
@@ -43,10 +43,17 @@ class Motor:
 
     def _assert_flow_rates(self):
         if self.burn_time*self.ox_mdot > self.ox_mass:
-            raise Exception(f"!Tank will be underfilled. burn_time * ox_mdot = {self.burn_time*self.ox_mdot} kg ox_mass = {self.ox_mass} kg")
+            raise Exception(bcolors.FAIL + f"![ERROR]! " + bcolors.ENDC + "Tank will be underfilled. burn_time * ox_mdot = {self.burn_time*self.ox_mdot} kg ox_mass = {self.ox_mass} kg")
 
     def thrust(self, t):
         return self.thrust_curve(t)
     
-    def mdot(self, t):
-        return self.thrust(t) / self.ve
+    def mdot(self, t, burning):
+        if burning:
+            tot = self.thrust(t) / self.ve
+            # consider if g<0, there is liquid mass going to the combustion chamber that doesn't immediately burn
+            # The actual total mass of the rocket is not affeted by this. 
+            # When g<0, tot > 0, just less than ox_mdot
+            g = tot - self.ox_mdot
+            return tot, g
+        return 0,0
