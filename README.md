@@ -25,7 +25,7 @@ The framework is built around four main interacting classes that define the simu
 The Environment class handles atmospheric conditions, including air density and wind profiles. It integrates directly with the Windy.com API to fetch real-world forecast data for specific locations and dates.
 
   * Custom Models: You can define a specific location (lat, lon), model (e.g., 'gfs'), and even a specific date to retrieve historical or forecast weather data.
-  * Profiles: It generates altitude-dependent profiles for density ($\rho$) and wind vectors ($\vec{u}, \vec{v}$).
+  * Profiles: It generates altitude-dependent profiles for density ($\rho$) and wind vectors ($\vec{u}$, $\vec{v}$).
 
 -----
 
@@ -38,17 +38,22 @@ The Motor class models the propulsion system, supporting both Solid and Hybrid e
 The engine's performance is derived from the provided thrust curve and propellant mass:
 
   * Total Impulse ($I_{tot}$): Calculated by integrating the thrust curve over time.
-    $$
-    I_{tot} = \int_{0}^{t_{burn}} F(t) dt
-    $$
+
+$$
+I_{tot} = \int_{0}^{t_{burn}} F(t) dt
+$$
+
   * Effective Exhaust Velocity ($v_e$): The average velocity of exhaust gases, derived from the total impulse and total propellant mass ($M_p = m_{ox} + m_{grain}$).
-    $$
-    v_e = \frac{I_{tot}}{M_p}
-    $$
+
+$$
+v_e = \frac{I_{tot}}{M_p}
+$$
+
   * Total Mass Flow Rate ($\dot{m}_{tot}$): The instantaneous rate at which mass is ejected from the rocket, assumed proportional to thrust for a constant $v_e$.
-    $$
-    \dot{m}_{tot}(t) = \frac{F(t)}{v_e}
-    $$
+
+$$
+\dot{m}_{tot}(t) = \frac{F(t)}{v_e}
+$$
 
 ##### Hybrid vs. Solid Propulsion
 
@@ -56,7 +61,10 @@ The system distinguishes between motor types based on the oxidizer mass (ox\_mas
 
   * Solid Motors: ox\_mass = 0. The entire flow rate comes from the solid grain.
   * Hybrid Motors: ox\_mass \> 0. You must define a constant oxidizer flow rate (ox\_mdot). The system derives the solid grain regression rate ($\dot{m}_{grain}$) by subtracting the oxidizer flow from the total flow required to match the thrust curve.
-    $$\dot{m}_{grain}(t) = \dot{m}_{tot}(t) - \dot{m}_{ox}$$
+
+$$
+\dot{m}_{grain}(t) = \dot{m}_{tot}(t) - \dot{m}_{ox}
+$$
 
 > Note on Negative Grain Flow: In hybrid configurations, if the thrust $F(t)$ drops significantly (e.g., during startup or shutdown) while the constant oxidizer flow $\dot{m}_{ox}$ continues, the calculated $\dot{m}_{grain}$ may become negative. This physical interpretation implies that unburnt oxidizer is accumulating in the chamber or that the simplified constant $v_e$ model assumes a higher efficiency than is occurring at that moment.
 
@@ -87,23 +95,32 @@ The Simulation class orchestrates the interaction between the Environment, Motor
 Flight Forge solves the translational EOM using a Runge-Kutta 4th Order (RK4) numerical integrator. This method samples the state derivatives at four points within each time step ($dt$) to ensure high accuracy.
 
 The state vector is defined as:
+
 $$
 Y = [r_x, r_y, r_z, v_x, v_y, v_z, m]
 $$
+
 Forces considered include:
 
   * $\vec{F}_{thrust} = ||F(t)|| \cdot \hat{v}$
-  * $\vec{F}_{drag} = -\frac{1}{2} \rho v^2 C_d A_{ref} \cdot \hat{v}$.
-  * $\vec{F}_{g} = m \vec{g}$.
+  * $\vec{F}_{drag} = -\frac{1}{2} \rho v^2 C_d A_{ref} \cdot \hat{v}$
+  * $\vec{F}_{g} = m \vec{g}$
 
 #### Event Detection & Linearization
 
 The simulator actively monitors for discrete events such as Rail Departure, Apogee, and Burnout.
 
 To maintain precision independent of the time step size ($dt$), the engine employs State Linearization. When an event is detected between steps $t_i$ and $t_{i+1}$ (e.g., $v_z$ changes from positive to negative), the engine calculates the exact time fraction $\tau$ where the event occurred:
-$$\tau = \frac{Target - Z_0}{Z_1 - Z_0}$$
+
+$$
+\tau = \frac{Target - Z_0}{Z_1 - Z_0}
+$$
+
 An interpolated state $S_{event}$ is then generated and inserted into the output log:
-$$S_{event} = S_{prev} + \tau (S_{curr} - S_{prev})$$
+
+$$
+S_{event} = S_{prev} + \tau (S_{curr} - S_{prev})
+$$
 
 -----
 
