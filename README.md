@@ -201,7 +201,7 @@ env.set_model(api_key=api_key, model="iconEu", lat=39.389700, lon=-8.288964, dat
     --------------------------------
 
 
-![png](img/example_1_1.png)
+![](img/example_1_1.png)
     
 ```python
 motor = Motor("curves/thrust(2).csv", burn_time=4.2, ox_mass=7.33, ox_mdot=1.5, grain_mass=3, e_log=True)
