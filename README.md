@@ -201,7 +201,7 @@ env.set_model(api_key=api_key, model="iconEu", lat=39.389700, lon=-8.288964, dat
     --------------------------------
 
 
-![png](example_files/example_1_1.png)
+![png](img/example_1_1.png)
     
 ```python
 motor = Motor("curves/thrust(2).csv", burn_time=4.2, ox_mass=7.33, ox_mdot=1.5, grain_mass=3, e_log=True)
@@ -263,7 +263,7 @@ sim = Simulation(env, rocket, 12, 84, 144, e_log=True)
 sim.results.trajectory_3d()
 ```
 
-![](example_files/example_5_0.png)
+![](img/example_5_0.png)
 
 Or in a python script (main.py)
 
