@@ -149,6 +149,30 @@ vel_at_5 = sim.results.vz(5.0)
 ```python
 sim.results.plot_vs('x', 'z') # Plot trajectory (Z vs X)
 ```
+All features:
+
+```python
+sim.results.x(),
+            .y()
+            .z()
+            .vx()
+            .vy()
+            .vz()
+            .speed() (#magnitude)
+            .ax
+            .ay
+            .az
+            .acceleration (#magnitude)
+            .mass()
+
+
+motor.thrust()
+motor.grain_mdot()
+motor.total_mdot()
+rocket.drag() #only populated after simulation runs
+rocket.cd()
+
+```
 
 ### Example Usage: (Jupyter Notebook)
 
@@ -254,39 +278,17 @@ sim.results.vz()
 sim.results.m()
 ```
 
-
 ```python
 sim.results.total_mdot()
 ```
 
 ```python
-sim.results.thrust()
+rocket.thrust()
 ```
 
 ```python
-sim.results.drag()
-```
-
-More features:
-
-```python
-sim.results.x(),
-            .y()
-            .z()
-            .vx()
-            .vy()
-            .vz()
-            .speed() (#magnitude)
-            .ax
-            .ay
-            .az
-            .acceleration (#magnitude)
-            .m()
-            .thrust()
-            .drag()
-            .grain_mdot()
-            .total_mdot()
-
+rocket.drag()
+rocket.cd()
 ```
 
 Or in a python script (main.py)
@@ -300,6 +302,8 @@ import datetime
 load_dotenv()
 
 api_key = os.environ.get("API_KEY")
+
+# Add e_log=True to any core class to get more outputs
 
 env = Environment()
 tomorrow = datetime.date.today() + datetime.timedelta(days=1)
@@ -317,4 +321,5 @@ rocket.add_parachute(Parachute("main", 13.8991, 1, 450))
 sim = Simulation(env, rocket, 12, 84, 144, e_log=True) # Add plotter=LivePlotter(update_interval=x) to see live plotting
 #sim.results.z()
 #sim.results.vz()
+# (...)
 ```
