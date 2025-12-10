@@ -259,37 +259,11 @@ sim = Simulation(env, rocket, 12, 84, 144, e_log=True)
     mass = 40.99 kg
     -------------------------------------------
 
-
 ```python
 sim.results.trajectory_3d()
 ```
 
 ![](example_files/example_5_0.png)
-
-```python
-sim.results.z()
-```
-
-```python
-sim.results.vz()
-```
-
-```python
-sim.results.m()
-```
-
-```python
-sim.results.total_mdot()
-```
-
-```python
-rocket.thrust()
-```
-
-```python
-rocket.drag()
-rocket.cd()
-```
 
 Or in a python script (main.py)
 
