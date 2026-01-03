@@ -20,7 +20,7 @@ rocket.add_parachute(Parachute("drogue", 0.7354, 1, "apogee"))
 rocket.add_parachute(Parachute("main", 13.8991, 1, 450))
 
 # sim = Simulation(env, rocket, 12, 84, 144, e_log=True, plotter=LivePlotter()) # Add plotter=LivePlotter(update_interval=x) to see live plotting
-sim = Simulation(env, rocket, 12, 84, 144, e_log=True) # Add plotter=LivePlotter(update_interval=x) to see live plotting
+sim = Simulation(env, rocket, 12, 84, 144, e_log=True, plotter=LivePlotter()) # Add plotter=LivePlotter(update_interval=x) to see live plotting
 # sim.results.z()
 # sim.results.vz()
 # sim.results.trajectory_3d()
