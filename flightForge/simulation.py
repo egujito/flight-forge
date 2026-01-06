@@ -40,23 +40,16 @@ class SimulationResults:
         plt.show()
 
 class Simulation:
-    def __init__(self, environment, rocket, rail_length, inclination, heading, e_log=False, plotter=None, terminate_on="impact"):
+    def __init__(self, environment, rocket, rail_length, inclination, heading, e_log=False, terminate_on="impact"):
         self.e_log = e_log
         self.env = environment
         self.rocket = rocket
         self.motor = self.rocket.motor
-        self.plotter = plotter
         self.rail_length = rail_length
         self.inc = np.radians(inclination)
         self.heading = np.radians(heading)
         
         self.results: Optional[SimulationResults] = None 
-
-        self.linear_params = {
-            "apogee": None,
-            "out_of_rail_velocity": None,
-            "peak_thrust": None,
-        }
 
         self.dir = np.array([
             np.cos(self.inc) * np.cos(self.heading), 
@@ -69,6 +62,11 @@ class Simulation:
             "burn_out": None,
             "apogee": None,
             "impact": None
+        }
+        
+        self.linear_params = {
+            "out_of_rail_velocity": None,
+            "apogee": None,
         }
         
         self._run(terminate_on) 
@@ -214,15 +212,12 @@ class Simulation:
             
             self._event_check(t, t_prev, state, state_prev)
 
-            if self.plotter: self.plotter.update(t, state, self.events)
-
-        if self.plotter: self.plotter.finalize()
 
         time_arr = np.array(hist_t)
         
         self.results = SimulationResults(
             time_arr, 
-            np.array(hist_pos), 
+            np.array(hist_pos),
             np.array(hist_vel), 
             np.array(hist_accel), 
             np.array(hist_mass)

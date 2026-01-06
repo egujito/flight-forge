@@ -21,12 +21,5 @@ rocket.add_parachute(Parachute("main", 13.8991, 1, 450))
 
 # sim = Simulation(env, rocket, 12, 84, 144, e_log=True, plotter=LivePlotter()) # Add plotter=LivePlotter(update_interval=x) to see live plotting
 sim = Simulation(env, rocket, 12, 84, 144, e_log=True, plotter=LivePlotter()) # Add plotter=LivePlotter(update_interval=x) to see live plotting
-# sim.results.z()
-# sim.results.vz()
-# sim.results.trajectory_3d()
-# sim.results.z()
-# sim.results.mass()
-# motor.thrust()
-# motor.grain_mdot()
-# rocket.cd()
-# rocket.drag()
+
+#TODO: predict_cd -> prediction of the cd based on definition of aero surfaces
