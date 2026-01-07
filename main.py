@@ -1,4 +1,4 @@
-from flightForge import Environment, Motor, Rocket, Simulation, LivePlotter, Parachute
+from flightForge import Environment, Motor, Rocket, Simulation, Parachute
 from dotenv import load_dotenv
 import os
 import datetime
@@ -19,7 +19,6 @@ rocket.add_motor(motor)
 rocket.add_parachute(Parachute("drogue", 0.7354, 1, "apogee"))
 rocket.add_parachute(Parachute("main", 13.8991, 1, 450))
 
-# sim = Simulation(env, rocket, 12, 84, 144, e_log=True, plotter=LivePlotter()) # Add plotter=LivePlotter(update_interval=x) to see live plotting
-sim = Simulation(env, rocket, 12, 84, 144, e_log=True, plotter=LivePlotter()) # Add plotter=LivePlotter(update_interval=x) to see live plotting
+sim = Simulation(env, rocket, 12, 84, 144, e_log=True) 
 
 #TODO: predict_cd -> prediction of the cd based on definition of aero surfaces

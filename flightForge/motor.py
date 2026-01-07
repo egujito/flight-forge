@@ -55,7 +55,7 @@ class Motor:
         print(f"------------------------------------")
 
     def _compute_exhaust_velocity(self):
-        self.i_tot = np.trapz(self.thrust_arr, self.t)
+        self.i_tot = np.trapezoid(self.thrust_arr, self.t)
         total_propellant = self.initial_ox_mass + self.initial_grain_mass
         self.ve = self.i_tot / total_propellant
 
