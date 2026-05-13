@@ -4,7 +4,7 @@ from typing import Optional
 
 import numpy as np
 
-from . import logger
+from .logger import logger
 from .utils import ResultField, func_from_csv
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter, AutoMinorLocator

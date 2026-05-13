@@ -3,7 +3,7 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import numpy as np
 
-from . import logger
+from .logger import logger
 from .utils import ResultField, bcolors, compute_vec, unit_norm
 
 

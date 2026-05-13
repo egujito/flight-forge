@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import requests
 
-from . import logger
+from .logger import logger
 
 class Environment:
     def __init__(

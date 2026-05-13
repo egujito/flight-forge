@@ -1,7 +1,7 @@
 
 import numpy as np
 
-from . import logger
+from .logger import logger
 from .utils import ResultField, bcolors, func_from_csv
 
 
