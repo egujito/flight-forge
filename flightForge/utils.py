@@ -1,7 +1,8 @@
-import numpy as np 
-from scipy.interpolate import interp1d
-import matplotlib.pyplot as plt
 from typing import Optional, Union
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.interpolate import interp1d
 
 def func_from_csv(path, x="x", y="y"):
     x_vals = []
@@ -15,28 +16,46 @@ def func_from_csv(path, x="x", y="y"):
             x_vals.append(float(parts[0]))
             y_vals.append(float(parts[1]))
 
-    return interp1d(x_vals, y_vals, kind="linear", fill_value=0, bounds_error=False), x_vals, y_vals
+    return (
+        interp1d(
+            x_vals, y_vals, kind="linear", fill_value=0, bounds_error=False
+        ),
+        x_vals,
+        y_vals,
+    )
+
 
 def unit_norm(v):
     n = np.linalg.norm(v)
-    return v / n if n > 0 else v 
+    return v / n if n > 0 else v
+
 
 def compute_vec(m, u):
-     return m * u
+    return m * u
+
 
 class bcolors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKCYAN = '\033[96m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKCYAN = "\033[96m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+
 
 class ResultField:
-    def __init__(self, x_data: np.ndarray, y_data: np.ndarray, name: str, unit: str, color: str, x_label: str = "Time (s)"):
+    def __init__(
+        self,
+        x_data: np.ndarray,
+        y_data: np.ndarray,
+        name: str,
+        unit: str,
+        color: str,
+        x_label: str = "Time (s)",
+    ):
         self.x_data = x_data
         self.y_data = y_data
         self.name = name
@@ -46,8 +65,9 @@ class ResultField:
         self._interpolator = None
 
         if len(self.x_data) > 1:
+            kind = 'cubic' if len(self.x_data) > 3 else 'linear'
             self._interpolator = interp1d(
-                self.x_data, y_data, kind='cubic',
+                self.x_data, y_data, kind=kind,
                 bounds_error=False, fill_value='extrapolate'
             )
 
