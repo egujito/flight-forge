@@ -45,10 +45,10 @@ class Rocket:
         total_drag_area = cd_rocket * self.ref_area
 
         for p in self.parachutes:
-            if p.deploy_t is None:
+            if p.signal_t is None:
                 continue
-            if t > p.deploy_t:
-                tau = min((t - p.deploy_t) / p.lag, 1.0)
+            if t > p.signal_t:
+                tau = min((t - p.signal_t) / p.lag, 1.0)
                 total_drag_area += tau * p.cd_s
 
         return float(total_drag_area / self.ref_area)
