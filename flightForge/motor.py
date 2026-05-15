@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from .logger import logger
-from .utils import ResultField, bcolors, func_from_csv
+from .logger import bcolors, logger
+from .utils import ResultField, func_from_csv
 
 
 class Motor:
