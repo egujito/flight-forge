@@ -100,7 +100,7 @@ class ResultField:
                 x_plot = self.x_data[:cut_idx]
                 y_plot = self.y_data[:cut_idx]
 
-        fig, ax = plt.subplots(figsize=(10, 6))
+        _, ax = plt.subplots(figsize=(10, 6))
         ax.plot(x_plot, y_plot, color=self.color, linewidth=2)
         ax.set_xlabel(self.x_label, fontsize=12)
         ax.set_ylabel(f"{self.name} ({self.unit})", fontsize=12)
