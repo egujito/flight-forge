@@ -36,10 +36,6 @@ def unit_norm(v: np.ndarray) -> np.ndarray:
     return v / n if n > 0 else v
 
 
-def compute_vec(m: float, u: np.ndarray) -> np.ndarray:
-    return m * u
-
-
 class ResultField:
     def __init__(
         self,

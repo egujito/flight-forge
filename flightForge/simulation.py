@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from .logger import bcolors, logger
-from .utils import ResultField, compute_vec, unit_norm
+from .utils import ResultField, unit_norm
 
 if TYPE_CHECKING:
     from .environment import Environment
@@ -235,12 +235,10 @@ class Simulation:
         v_dir = self.dir if on_rail else unit_norm(rel_v)
 
         drag_mag = -cd * self.rocket.ref_area * 0.5 * rho * v_mag**2
-        drag = compute_vec(drag_mag, v_dir)
+        drag = drag_mag * v_dir
 
         burning = self.events["burn_out"] is None
-        thrust = (
-            compute_vec(self.motor.get_thrust(t), v_dir) if burning else np.zeros(3)
-        )
+        thrust = self.motor.get_thrust(t) * v_dir if burning else np.zeros(3)
 
         weight = m * np.array([0, 0, -self.env.g])
         total_force = thrust + drag + weight
