@@ -1,9 +1,14 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Optional, Union
+
+
+@dataclass
 class Parachute:
-    def __init__(self, name, cd_s, lag, trigger):
-        self.cd_s = cd_s
-        self.lag = lag
-        self.name = name
-        self.trigger = trigger
-        self.active = False
-        self.logged = False
-        self.deploy_t = None
+    name: str
+    cd_s: float
+    lag: float
+    trigger: Union[str, float]
+    deploy_t: Optional[float] = field(default=None, init=False)
+    logged: bool = field(default=False, init=False)
