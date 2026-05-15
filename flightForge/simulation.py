@@ -1,4 +1,6 @@
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -6,9 +8,21 @@ import numpy as np
 from .logger import logger
 from .utils import ResultField, bcolors, compute_vec, unit_norm
 
+if TYPE_CHECKING:
+    from .environment import Environment
+    from .motor import Motor
+    from .rocket import Rocket
+
 
 class SimulationResults:
-    def __init__(self, time, pos, vel, accel, mass):
+    def __init__(
+        self,
+        time: np.ndarray,
+        pos: np.ndarray,
+        vel: np.ndarray,
+        accel: np.ndarray,
+        mass: np.ndarray,
+    ) -> None:
         self.x = ResultField(time, pos[:, 0], "X Position", "m", "blue")
         self.y = ResultField(time, pos[:, 1], "Y Position", "m", "green")
         self.z = ResultField(time, pos[:, 2], "Altitude", "m", "red")
@@ -68,18 +82,18 @@ class SimulationResults:
 class Simulation:
     def __init__(
         self,
-        environment,
-        rocket,
-        rail_length,
-        inclination,
-        heading,
-        e_log=False,
+        environment: Environment,
+        rocket: Rocket,
+        rail_length: float,
+        inclination: float,
+        heading: float,
+        e_log: bool = False,
         plotter=None,
-    ):
+    ) -> None:
         self.e_log = e_log
         self.env = environment
         self.rocket = rocket
-        self.motor = self.rocket.motor
+        self.motor: Motor = self.rocket.motor
         self.rail_length = rail_length
         self.inc = np.radians(inclination)
         self.heading = np.radians(heading)
@@ -94,25 +108,40 @@ class Simulation:
             ]
         )
 
-        self.events = {
+        self.events: dict[str, Optional[tuple[float, np.ndarray]]] = {
             "rail_departure": None,
             "burn_out": None,
             "apogee": None,
             "impact": None,
         }
 
-        self.linear_params = {
+        self.linear_params: dict[str, Optional[float]] = {
             "out_of_rail_velocity": None,
             "apogee": None,
         }
 
-    def _t_target_interpolation(self, t, t_prev, state, state_prev, t_target):
+    def _t_target_interpolation(
+        self,
+        t: float,
+        t_prev: float,
+        state: np.ndarray,
+        state_prev: np.ndarray,
+        t_target: float,
+    ) -> tuple[float, np.ndarray]:
         if t == t_prev:
-            return state.copy()
+            return t_target, state.copy()
         tau = (t_target - t_prev) / (t - t_prev)
         return t_target, state_prev + tau * (state - state_prev)
 
-    def _linear_state(self, t, t_prev, state, state_prev, i, target):
+    def _linear_state(
+        self,
+        t: float,
+        t_prev: float,
+        state: np.ndarray,
+        state_prev: np.ndarray,
+        i: int,
+        target: float,
+    ) -> tuple[float, np.ndarray]:
         z0, z1 = state_prev[i], state[i]
         if z0 == z1:
             tau = 0.0
@@ -121,7 +150,7 @@ class Simulation:
         tau = np.clip(tau, 0.0, 1.0)
         return t_prev + tau * (t - t_prev), state_prev + tau * (state - state_prev)
 
-    def _cmd_log(self, t, s, si):
+    def _cmd_log(self, t: float, s: np.ndarray, si: str) -> None:
         logger.info("-------------------------------------------")
         logger.info(f"Event {bcolors.BOLD}{bcolors.OKGREEN}{si}{bcolors.ENDC} at {t:.2f} s")
         logger.info(f"Position: ({s[0]:.2f}, {s[1]:.2f}, {s[2]:.2f}) m")
@@ -129,7 +158,13 @@ class Simulation:
         logger.info(f"Mass: {s[6]:.2f} kg")
         logger.info("-------------------------------------------")
 
-    def _event_check(self, t, t_prev, state, state_prev):
+    def _event_check(
+        self,
+        t: float,
+        t_prev: float,
+        state: np.ndarray,
+        state_prev: np.ndarray,
+    ) -> None:
         tl: Optional[float] = None
         sl: Optional[np.ndarray] = None
         state_info = ""
@@ -142,7 +177,7 @@ class Simulation:
                     t, t_prev, state, state_prev, 2, self.dir[2] * self.rail_length
                 )
                 self.events["rail_departure"] = (tl, sl)
-                self.linear_params["out_of_rail_velocity"] = np.linalg.norm(sl[3:6])
+                self.linear_params["out_of_rail_velocity"] = float(np.linalg.norm(sl[3:6]))
                 state_info = "rail_departure"
 
         if self.events["burn_out"] is None and t_prev < self.motor.burn_time <= t:
@@ -156,7 +191,7 @@ class Simulation:
             if state_prev[5] > 0 and state[5] <= 0:
                 tl, sl = self._linear_state(t, t_prev, state, state_prev, 5, 0)
                 self.events["apogee"] = (tl, sl)
-                self.linear_params["apogee"] = sl[2]
+                self.linear_params["apogee"] = float(sl[2])
                 state_info = "apogee"
 
         if self.events["impact"] is None and self.events["rail_departure"] is not None:
@@ -165,9 +200,8 @@ class Simulation:
                 self.events["impact"] = (tl, sl)
                 state_info = "impact"
 
-        if sl is not None:
-            if self.e_log:
-                self._cmd_log(tl, sl, state_info)
+        if sl is not None and self.e_log:
+            self._cmd_log(tl, sl, state_info)
 
         for p in self.rocket.parachutes:
             active = False
@@ -176,11 +210,7 @@ class Simulation:
                     p.deploy_t = t
                     active = True
                 elif isinstance(p.trigger, (int, float)):
-                    if (
-                        state[2] <= p.trigger
-                        and state_prev[2] > p.trigger
-                        and state[5] < 0
-                    ):
+                    if state[2] <= p.trigger and state_prev[2] > p.trigger and state[5] < 0:
                         p.deploy_t = t
                         active = True
             if self.e_log and not p.logged and active:
@@ -188,13 +218,15 @@ class Simulation:
                 p.logged = True
                 logger.info(f"{bcolors.OKCYAN}{p.name} deployed at: {pt:.2f} s{bcolors.ENDC}")
 
-    def _compute_physics(self, t, state):
+    def _compute_physics(
+        self, t: float, state: np.ndarray
+    ) -> tuple[np.ndarray, tuple[np.ndarray, np.ndarray, float, float]]:
         pos, vel, m = state[:3], state[3:6], state[6]
 
         rho = self.env.density(pos[2])
         wind = np.array([*self.env.wind(pos[2]), 0.0])
         rel_v = vel - wind
-        v_mag = np.linalg.norm(rel_v)
+        v_mag = float(np.linalg.norm(rel_v))
         mach = v_mag / self.env.speed_of_sound(pos[2])
 
         cd = self.rocket.e_cd(mach, self.events, pos[2], t)
@@ -202,7 +234,6 @@ class Simulation:
         on_rail = self.events["rail_departure"] is None
         v_dir = self.dir if on_rail else unit_norm(rel_v)
 
-        #TODO: Implement live feeding of cd values from calculation in extras/cd_tools
         drag_mag = -cd * self.rocket.ref_area * 0.5 * rho * v_mag**2
         drag = compute_vec(drag_mag, v_dir)
 
@@ -224,7 +255,19 @@ class Simulation:
 
         return np.concatenate((vel, accel, [-mdot])), (thrust, drag, mdot, g_mdot)
 
-    def run(self, terminate_on="impact", dt=0.01, t_max=1000, initial_state: Optional[np.ndarray] = None):
+    def run(
+        self,
+        terminate_on: str = "impact",
+        dt: float = 0.01,
+        t_max: float = 1000,
+        initial_state: Optional[np.ndarray] = None,
+    ) -> SimulationResults:
+        if terminate_on not in self.events:
+            raise ValueError(
+                f"Invalid terminate_on: '{terminate_on}'. "
+                f"Valid keys: {list(self.events.keys())}"
+            )
+
         t = 0.0
         if initial_state is not None:
             state = initial_state
@@ -235,7 +278,7 @@ class Simulation:
                 + self.motor.initial_grain_mass
             )
             state = np.array([0, 0, 0, 0, 0, 0, m0])
-        
+
         if self.e_log:
             logger.info(f"Initial Mass: {state[6]:.2f} kg")
 
@@ -254,9 +297,8 @@ class Simulation:
             hist_vel.append(state[3:6])
             hist_mass.append(state[6])
             hist_accel.append(d_state[3:6])
-
-            hist_thrust_mag.append(np.linalg.norm(thrust_vec))
-            hist_drag_mag.append(np.linalg.norm(drag_vec))
+            hist_thrust_mag.append(float(np.linalg.norm(thrust_vec)))
+            hist_drag_mag.append(float(np.linalg.norm(drag_vec)))
             hist_mdot.append(mdot)
             hist_g_mdot.append(g_mdot)
 
@@ -269,9 +311,11 @@ class Simulation:
             t += dt
 
             self._event_check(t, t_prev, state, state_prev)
-            if self.plotter: self.plotter.update(t, state, self.events)
+            if self.plotter:
+                self.plotter.update(t, state, self.events)
 
-        if self.plotter: self.plotter.finalize()
+        if self.plotter:
+            self.plotter.finalize()
 
         time_arr = np.array(hist_t)
 
@@ -292,8 +336,8 @@ class Simulation:
         self.motor.grain_mdot = ResultField(
             time_arr, np.array(hist_g_mdot), "Grain Mdot", "kg/s", "darkred"
         )
-
         self.rocket.drag = ResultField(
             time_arr, np.array(hist_drag_mag), "Drag Force", "N", "magenta"
         )
+
         return self.results
