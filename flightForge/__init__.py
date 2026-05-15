@@ -1,17 +1,19 @@
 from .environment import Environment
+from .flight import FlightData
 from .motor import Motor
+from .parachutes import Parachute
 from .rocket import Rocket
 from .simulation import Simulation
-from .parachutes import Parachute
-from .plotting import LivePlotter
+from .utils import logarithmic_thrust
 from .logger import logger
 
 __all__ = [
     "Environment",
+    "FlightData",
     "Motor",
+    "Parachute",
     "Rocket",
     "Simulation",
-    "Parachute",
-    "LivePlotter",
+    "logarithmic_thrust",
     "logger",
 ]
