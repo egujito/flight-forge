@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from .logger import bcolors, logger
-from .utils import ResultField, unit_norm
+from .utils import unit_norm
 
 if TYPE_CHECKING:
     from .environment import Environment

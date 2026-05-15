@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Callable, Union
 
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import interp1d
 
 
 def func_from_csv(path: str) -> tuple[interp1d, np.ndarray, np.ndarray]:
+    """Load a two-column CSV and return (interpolator, x_array, y_array)."""
     x_vals: list[float] = []
     y_vals: list[float] = []
 
@@ -31,64 +31,49 @@ def func_from_csv(path: str) -> tuple[interp1d, np.ndarray, np.ndarray]:
     )
 
 
+def load_curve(
+    source: Union[str, Callable[[float], float]],
+) -> Callable[[float], float]:
+    """Return a callable from either a CSV path or an existing callable."""
+    if callable(source):
+        return source
+    interp, _, _ = func_from_csv(source)
+    return interp
+
+
+def logarithmic_thrust(
+    burn_time: float,
+    peak_thrust: float,
+    ramp_time: float = 0.2,
+) -> Callable[[float], float]:
+    """Return a thrust-vs-time callable with a linear ramp and logarithmic decay.
+
+    Args:
+        burn_time:  Total burn duration in seconds.
+        peak_thrust: Peak thrust in Newtons, reached at end of ramp.
+        ramp_time:  Duration of the linear ramp-up phase (default 0.2 s).
+    """
+    if burn_time <= 0:
+        raise ValueError("burn_time must be positive.")
+    if peak_thrust <= 0:
+        raise ValueError("peak_thrust must be positive.")
+    if ramp_time < 0 or ramp_time >= burn_time:
+        raise ValueError("ramp_time must be in [0, burn_time).")
+
+    decay_duration = burn_time - ramp_time
+
+    def _thrust(t: float) -> float:
+        if t < 0 or t > burn_time:
+            return 0.0
+        if t <= ramp_time:
+            return peak_thrust * (t / ramp_time) if ramp_time > 0 else peak_thrust
+        progress = (t - ramp_time) / decay_duration
+        return peak_thrust * (1.0 - np.log1p(progress * (np.e - 1.0)))
+
+    return _thrust
+
+
 def unit_norm(v: np.ndarray) -> np.ndarray:
+    """Return the unit vector of v, or v itself if its magnitude is zero."""
     n = np.linalg.norm(v)
     return v / n if n > 0 else v
-
-
-class ResultField:
-    def __init__(
-        self,
-        x_data: np.ndarray,
-        y_data: np.ndarray,
-        name: str,
-        unit: str,
-        color: str,
-        x_label: str = "Time (s)",
-    ) -> None:
-        self.x_data = x_data
-        self.y_data = y_data
-        self.name = name
-        self.unit = unit
-        self.color = color
-        self.x_label = x_label
-        self._interpolator: Optional[interp1d] = None
-
-        if len(self.x_data) > 1:
-            kind = "cubic" if len(self.x_data) > 3 else "linear"
-            self._interpolator = interp1d(
-                self.x_data,
-                y_data,
-                kind=kind,
-                bounds_error=False,
-                fill_value="extrapolate",
-            )
-
-    def __call__(self, t: Optional[float] = None) -> Optional[float]:
-        if t is not None:
-            return float(self._interpolator(t)) if self._interpolator else 0.0
-        self.plot()
-        return None
-
-    def plot(self) -> None:
-        threshold = 1e-4
-        significant_indices = np.where(np.abs(self.y_data) > threshold)[0]
-
-        x_plot = self.x_data
-        y_plot = self.y_data
-
-        if "Time" in self.x_label and len(significant_indices) > 0:
-            last_idx = significant_indices[-1]
-            if last_idx < len(self.y_data) - 1:
-                cut_idx = min(last_idx + 6, len(self.y_data))
-                x_plot = self.x_data[:cut_idx]
-                y_plot = self.y_data[:cut_idx]
-
-        _, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(x_plot, y_plot, color=self.color, linewidth=2)
-        ax.set_xlabel(self.x_label, fontsize=12)
-        ax.set_ylabel(f"{self.name} ({self.unit})", fontsize=12)
-        ax.set_title(f"{self.name} vs {self.x_label.split(' ')[0]}", fontsize=14)
-        ax.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.show()

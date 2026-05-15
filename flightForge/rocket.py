@@ -8,7 +8,7 @@ import numpy as np
 from matplotlib.ticker import AutoMinorLocator, FormatStrFormatter
 
 from .logger import logger
-from .utils import ResultField, func_from_csv
+from .utils import func_from_csv, load_curve
 
 
 class Rocket:
@@ -26,23 +26,16 @@ class Rocket:
         self.parachutes: list = []
         self.motor: Optional[Any] = None
 
-        if not isinstance(drag_source, str):
-            self._cd_func = drag_source.get_cd_function()
-            self.mach_arr = np.linspace(0.01, 3.0, 100)
-            self.cd_arr = [self._cd_func(m) for m in self.mach_arr]
-            self.plot_range_locked = False
-        else:
-            self._cd_func, self.mach_arr, self.cd_arr = func_from_csv(drag_source)
+        if isinstance(drag_source, str):
+            self._cd_func, mach_arr, cd_arr = func_from_csv(drag_source)
+            self.mach_arr: np.ndarray = mach_arr
+            self.cd_arr: np.ndarray = cd_arr
             self.plot_range_locked = True
-
-        self.cd = ResultField(
-            np.array(self.mach_arr),
-            np.array(self.cd_arr),
-            "Drag Coefficient",
-            "-",
-            "purple",
-            x_label="Mach Number",
-        )
+        else:
+            self._cd_func = load_curve(drag_source)
+            self.mach_arr = np.linspace(0.01, 3.0, 100)
+            self.cd_arr = np.array([self._cd_func(m) for m in self.mach_arr])
+            self.plot_range_locked = False
 
         if e_log:
             self._cmd_log()
