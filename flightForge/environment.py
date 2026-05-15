@@ -24,7 +24,8 @@ class Environment:
         wind_v: Optional[Callable[[float], float]] = None,
         rho_profile: Optional[Callable[[float], float]] = None,
     ) -> None:
-        """Initialise environment with optional API credentials and custom profiles.
+        """
+        Initialise environment with optional API credentials and custom profiles.
 
         Args:
             api_key:     Windy.com API key. Triggers API fetch when provided with lat/lon.
@@ -64,7 +65,8 @@ class Environment:
         model: str = "gfs",
         date: Optional[tuple[int, int, int]] = None,
     ) -> None:
-        """Fetch atmospheric data from the Windy API and override wind/density profiles.
+        """
+        Fetch atmospheric data from the Windy API and override wind/density profiles.
 
         Args:
             api_key: Windy.com API key.

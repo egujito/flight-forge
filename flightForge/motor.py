@@ -5,7 +5,7 @@ from typing import Callable, Union
 import numpy as np
 
 from .logger import bcolors, logger
-from .utils import func_from_csv, load_curve
+from .utils import _func_from_csv, _load_curve
 
 
 class Motor:
@@ -19,7 +19,8 @@ class Motor:
         initial_ox_mass: float = 0.0,
         ox_mdot: float = 0.0,
     ) -> None:
-        """Initialise motor from a thrust curve (CSV path or callable).
+        """
+        Initialise motor from a thrust curve (CSV path or callable).
 
         Args:
             thrust_source:      Path to a two-column CSV or a callable f(t) -> N.
@@ -43,10 +44,10 @@ class Motor:
         self.ox_mdot = ox_mdot
         self.type = "Solid" if initial_ox_mass <= 0.0 else "Hybrid"
 
-        self.thrust_curve = load_curve(thrust_source)
+        self.thrust_curve = _load_curve(thrust_source)
 
         if isinstance(thrust_source, str):
-            _, self.t_data, self.thrust_data = func_from_csv(thrust_source)
+            _, self.t_data, self.thrust_data = _func_from_csv(thrust_source)
         else:
             self.t_data = np.linspace(0.0, burn_time, max(int(burn_time / 0.001), 500))
             self.thrust_data = np.array([self.thrust_curve(t) for t in self.t_data])
@@ -74,14 +75,14 @@ class Motor:
         if self.burn_time * self.ox_mdot > self.initial_ox_mass:
             raise ValueError(f"{bcolors.FAIL}[ERROR]{bcolors.ENDC} Tank underfilled.")
 
-    def get_thrust(self, t: float) -> float:
+    def _get_thrust(self, t: float) -> float:
         """Return thrust in Newtons at time t."""
         return float(self.thrust_curve(t))
 
-    def get_mdot(self, t: float, burning: bool) -> tuple[float, float]:
+    def _get_mdot(self, t: float, burning: bool) -> tuple[float, float]:
         """Return (total_mdot, grain_mdot) in kg/s at time t."""
         if burning:
-            tot = self.get_thrust(t) / self.ve if self.ve > 0 else 0.0
+            tot = self._get_thrust(t) / self.ve if self.ve > 0 else 0.0
             g = max(tot - self.ox_mdot, 0.0)
             return tot, g
         return 0.0, 0.0

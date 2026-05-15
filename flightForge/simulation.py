@@ -7,7 +7,7 @@ from scipy.integrate import RK45
 
 from .flight import FlightData
 from .logger import bcolors, logger
-from .utils import unit_norm
+from .utils import _unit_norm
 
 if TYPE_CHECKING:
     from .environment import Environment
@@ -183,21 +183,21 @@ class Simulation:
         v_mag = float(np.linalg.norm(rel_v))
         mach = v_mag / self.env.speed_of_sound(pos[2])
 
-        cd = self.rocket.e_cd(mach, self.events, pos[2], t)
+        cd = self.rocket._e_cd(mach, self.events, pos[2], t)
 
         on_rail = self.events["rail_departure"] is None
-        v_dir = self.dir if on_rail else unit_norm(rel_v)
+        v_dir = self.dir if on_rail else _unit_norm(rel_v)
 
         drag_mag = -cd * self.rocket.ref_area * 0.5 * rho * v_mag**2
         drag = drag_mag * v_dir
 
         burning = self.events["burn_out"] is None
-        thrust = self.motor.get_thrust(t) * v_dir if burning else np.zeros(3)
+        thrust = self.motor._get_thrust(t) * v_dir if burning else np.zeros(3)
 
         weight = m_total * np.array([0.0, 0.0, -self.env.g])
         total_force = thrust + drag + weight
 
-        _, g_mdot = self.motor.get_mdot(t, burning)
+        _, g_mdot = self.motor._get_mdot(t, burning)
         ox_dot = -self.motor.ox_mdot if m_ox > 0 else 0.0
         grain_dot = -g_mdot if m_grain > 0 else 0.0
 
@@ -220,7 +220,8 @@ class Simulation:
         t_max: float = 1000,
         initial_state: Optional[np.ndarray] = None,
     ) -> FlightData:
-        """Run the simulation and return a FlightData object.
+        """
+        Run the simulation and return a FlightData object.
 
         Args:
             terminate_on: Event key to stop at ('impact', 'apogee', 'burn_out', 'rail_departure').
@@ -276,15 +277,15 @@ class Simulation:
             mach = v_mag / self.env.speed_of_sound(pos[2])
 
             burning = self.events["burn_out"] is None
-            thrust_f = self.motor.get_thrust(t)
+            thrust_f = self.motor._get_thrust(t)
             on_rail = self.events["rail_departure"] is None
-            v_dir = self.dir if on_rail else unit_norm(rel_v)
+            v_dir = self.dir if on_rail else _unit_norm(rel_v)
             thrust_vec = thrust_f * v_dir if burning else np.zeros(3)
 
-            cd = self.rocket.e_cd(mach, self.events, pos[2], t)
+            cd = self.rocket._e_cd(mach, self.events, pos[2], t)
             drag_vec = -cd * self.rocket.ref_area * 0.5 * rho * v_mag**2 * v_dir
 
-            mdot, g_mdot = self.motor.get_mdot(t, burning)
+            mdot, g_mdot = self.motor._get_mdot(t, burning)
 
             hist_t.append(t)
             hist_pos.append(pos.copy())

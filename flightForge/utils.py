@@ -6,7 +6,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 
-def func_from_csv(path: str) -> tuple[interp1d, np.ndarray, np.ndarray]:
+def _func_from_csv(path: str) -> tuple[interp1d, np.ndarray, np.ndarray]:
     """Load a two-column CSV and return (interpolator, x_array, y_array)."""
     x_vals: list[float] = []
     y_vals: list[float] = []
@@ -31,13 +31,13 @@ def func_from_csv(path: str) -> tuple[interp1d, np.ndarray, np.ndarray]:
     )
 
 
-def load_curve(
+def _load_curve(
     source: Union[str, Callable[[float], float]],
 ) -> Callable[[float], float]:
     """Return a callable from either a CSV path or an existing callable."""
     if callable(source):
         return source
-    interp, _, _ = func_from_csv(source)
+    interp, _, _ = _func_from_csv(source)
     return interp
 
 
@@ -73,7 +73,7 @@ def logarithmic_thrust(
     return _thrust
 
 
-def unit_norm(v: np.ndarray) -> np.ndarray:
+def _unit_norm(v: np.ndarray) -> np.ndarray:
     """Return the unit vector of v, or v itself if its magnitude is zero."""
     n = np.linalg.norm(v)
     return v / n if n > 0 else v

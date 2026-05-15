@@ -8,7 +8,7 @@ import numpy as np
 from matplotlib.ticker import AutoMinorLocator, FormatStrFormatter
 
 from .logger import logger
-from .utils import func_from_csv, load_curve
+from .utils import _func_from_csv, _load_curve
 
 
 class Rocket:
@@ -20,7 +20,8 @@ class Rocket:
         drag_source: Any,
         dim: float,
     ) -> None:
-        """Initialise rocket geometry and drag model.
+        """
+        Initialise rocket geometry and drag model.
 
         Args:
             dry_mass:    Structural mass excluding propellant in kg.
@@ -40,19 +41,19 @@ class Rocket:
         self.motor: Optional[Any] = None
 
         if isinstance(drag_source, str):
-            self._cd_func, mach_arr, cd_arr = func_from_csv(drag_source)
+            self._cd_func, mach_arr, cd_arr = _func_from_csv(drag_source)
             self.mach_arr: np.ndarray = mach_arr
             self.cd_arr: np.ndarray = cd_arr
             self.plot_range_locked = True
         else:
-            self._cd_func = load_curve(drag_source)
+            self._cd_func = _load_curve(drag_source)
             self.mach_arr = np.linspace(0.01, 3.0, 100)
             self.cd_arr = np.array([self._cd_func(m) for m in self.mach_arr])
             self.plot_range_locked = False
 
         self._cmd_log()
 
-    def e_cd(self, mach: float, events: dict, z: float, t: float) -> float:
+    def _e_cd(self, mach: float, events: dict, z: float, t: float) -> float:
         """Return effective drag coefficient including deployed parachutes."""
         cd_rocket = self._cd_func(mach)
         total_drag_area = cd_rocket * self.ref_area
