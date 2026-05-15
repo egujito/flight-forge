@@ -1,11 +1,13 @@
+from __future__ import annotations
+
+from typing import Optional
+
 import matplotlib.pyplot as plt
 import numpy as np
-from mpl_toolkits.mplot3d import Axes3D
 
 
-#Slow performance, the ideal solution is to use SimulationResults plots
 class LivePlotter:
-    def __init__(self, update_interval=1000):
+    def __init__(self, update_interval: int = 1000) -> None:
         self.update_interval = update_interval
         self.iteration = 0
         
@@ -32,7 +34,7 @@ class LivePlotter:
         
         plt.ion()  
     
-    def _create_3d_trajectory_window(self):
+    def _create_3d_trajectory_window(self) -> None:
 
         self.fig_3d = plt.figure(figsize=(10, 8))
         self.fig_3d.canvas.manager.set_window_title('3D Trajectory')
@@ -57,7 +59,7 @@ class LivePlotter:
         
         plt.tight_layout()
     
-    def _create_altitude_window(self):
+    def _create_altitude_window(self) -> None:
         self.fig_alt = plt.figure(figsize=(10, 6))
         self.fig_alt.canvas.manager.set_window_title('Altitude vs Time')
         
@@ -79,8 +81,7 @@ class LivePlotter:
         
         plt.tight_layout()
     
-    def _create_velocity_window(self):
-        """Create velocity vs time plot window."""
+    def _create_velocity_window(self) -> None:
         self.fig_vel = plt.figure(figsize=(10, 6))
         self.fig_vel.canvas.manager.set_window_title('Velocity vs Time')
         
@@ -102,7 +103,7 @@ class LivePlotter:
         self.ax_vel.legend(loc='upper right')
         
         plt.tight_layout()
-    def update(self, t, state, events):
+    def update(self, t: float, state: np.ndarray, events: dict) -> None:
         self.iteration += 1
 
         x, y, z, vx, vy, vz, m = state
@@ -133,7 +134,7 @@ class LivePlotter:
             self._redraw()
 
    
-    def _redraw(self):
+    def _redraw(self) -> None:
         time_array = np.array(self.time)
         x_array = np.array(self.x)
         y_array = np.array(self.y)
@@ -152,7 +153,7 @@ class LivePlotter:
         
         plt.pause(0.001)
     
-    def _update_3d_plot(self, x_array, y_array, z_array):
+    def _update_3d_plot(self, x_array: np.ndarray, y_array: np.ndarray, z_array: np.ndarray) -> None:
         self.line_3d.set_data(x_array, y_array)
         self.line_3d.set_3d_properties(z_array)
         
@@ -184,7 +185,7 @@ class LivePlotter:
             self.ax_3d.set_ylim(y_array.min() - 0.1*y_range, y_array.max() + 0.1*y_range)
             self.ax_3d.set_zlim(0, z_max * 1.1)
     
-    def _update_altitude_plot(self, time_array, z_array):
+    def _update_altitude_plot(self, time_array: np.ndarray, z_array: np.ndarray) -> None:
         self.line_alt.set_data(time_array, z_array)
         self.ax_alt.relim()
         self.ax_alt.autoscale_view()
@@ -201,7 +202,7 @@ class LivePlotter:
             self.apogee_line_alt.set_xdata([self.events['apogee']])
             self.apogee_line_alt.set_visible(True)
     
-    def _update_velocity_plot(self, time_array, vel_array):
+    def _update_velocity_plot(self, time_array: np.ndarray, vel_array: np.ndarray) -> None:
         self.line_vel.set_data(time_array, vel_array)
         self.ax_vel.relim()
         self.ax_vel.autoscale_view()
@@ -218,19 +219,19 @@ class LivePlotter:
             self.apogee_line_vel.set_xdata([self.events['apogee']])
             self.apogee_line_vel.set_visible(True)
     
-    def _find_time_index(self, event_time):
+    def _find_time_index(self, event_time: float) -> Optional[int]:
         if len(self.time) == 0:
             return None
         time_array = np.array(self.time)
         idx = np.argmin(np.abs(time_array - event_time))
         return idx
     
-    def finalize(self):
+    def finalize(self) -> None:
         plt.ioff()
         self._redraw()  
         plt.show()
     
-    def close(self):
+    def close(self) -> None:
         plt.close(self.fig_3d)
         plt.close(self.fig_alt)
         plt.close(self.fig_vel)
