@@ -12,13 +12,26 @@ from .utils import func_from_csv, load_curve
 
 
 class Rocket:
+    """Rocket aerodynamic and structural model."""
+
     def __init__(
         self,
         dry_mass: float,
         drag_source: Any,
         dim: float,
-        e_log: bool = False,
     ) -> None:
+        """Initialise rocket geometry and drag model.
+
+        Args:
+            dry_mass:    Structural mass excluding propellant in kg.
+            drag_source: CSV path or callable f(mach) -> Cd.
+            dim:         Body diameter in metres (used to compute reference area).
+        """
+        if dry_mass <= 0:
+            raise ValueError("dry_mass must be positive.")
+        if dim <= 0:
+            raise ValueError("dim must be positive.")
+
         self.dim = dim
         self.ref_area = (dim / 2) ** 2 * math.pi
         self.dry_mass = dry_mass
@@ -37,10 +50,10 @@ class Rocket:
             self.cd_arr = np.array([self._cd_func(m) for m in self.mach_arr])
             self.plot_range_locked = False
 
-        if e_log:
-            self._cmd_log()
+        self._cmd_log()
 
     def e_cd(self, mach: float, events: dict, z: float, t: float) -> float:
+        """Return effective drag coefficient including deployed parachutes."""
         cd_rocket = self._cd_func(mach)
         total_drag_area = cd_rocket * self.ref_area
 
@@ -54,9 +67,11 @@ class Rocket:
         return float(total_drag_area / self.ref_area)
 
     def add_parachute(self, chute: Any) -> None:
+        """Attach a Parachute to this rocket."""
         self.parachutes.append(chute)
 
     def add_motor(self, m: Any) -> None:
+        """Attach a Motor to this rocket."""
         self.motor = m
 
     def _cmd_log(self) -> None:
@@ -67,6 +82,7 @@ class Rocket:
         logger.info("-------------------------------")
 
     def plot_aerodynamics(self) -> None:
+        """Plot Cd vs Mach with subsonic, transonic, and supersonic breakdowns."""
         mach = np.array(self.mach_arr)
         cd = np.array(self.cd_arr)
 
