@@ -1,30 +1,35 @@
+from __future__ import annotations
+
 import datetime
 import time
+from typing import Callable, Optional, Union
+
 import matplotlib.pyplot as plt
 import numpy as np
 import requests
 
 from .logger import logger
 
+
 class Environment:
     def __init__(
         self,
-        api_key=None,
-        lat=None,
-        lon=None,
-        model="gfs",
-        wind_profile=None,
-        rho_profile=None,
-        e_log=False,
-    ):
+        api_key: Optional[str] = None,
+        lat: Optional[float] = None,
+        lon: Optional[float] = None,
+        model: str = "gfs",
+        wind_profile: Optional[Callable] = None,
+        rho_profile: Optional[Callable] = None,
+        e_log: bool = False,
+    ) -> None:
         self.g = 9.80665
         self.R = 287.05
         self.gamma = 1.4
         self.beta = 1.458e-6
         self.S = 110.4
 
-        self.wind_profile = self._def_wind_profile
-        self.rho_profile = self._def_rho_profile
+        self.wind_profile: Callable = self._def_wind_profile
+        self.rho_profile: Callable = self._def_rho_profile
 
         self.h_vals = np.array([0.0])
         self.rho_vals = np.array([1.225])
@@ -44,106 +49,97 @@ class Environment:
         if api_key and lat is not None and lon is not None:
             self.set_model(api_key, lat, lon, model)
 
-    def set_model(self, api_key, lat, lon, model="gfs", date=None):
+    def set_model(
+        self,
+        api_key: str,
+        lat: float,
+        lon: float,
+        model: str = "gfs",
+        date: Optional[tuple[int, int, int]] = None,
+    ) -> None:
         self.lat = lat
         self.lon = lon
         self.model = model
 
-        target_ts_ms = None
+        target_ts_ms: Optional[float] = None
         if date is not None:
             try:
                 day, month, year = date
                 dt_obj = datetime.datetime(
                     year, month, day, 12, 0, 0, tzinfo=datetime.timezone.utc
                 )
-                target_ts_sec = dt_obj.timestamp()
-                target_ts_ms = target_ts_sec * 1000
+                target_ts_ms = dt_obj.timestamp() * 1000
             except Exception as e:
-                raise ValueError(f"Invalid date format: {e}")
+                raise ValueError(f"Invalid date format: {e}") from e
 
         self._fetch_data(api_key, float(lat), float(lon), model, target_ts_ms)
-        
+
         self.wind_profile = self._api_wind_profile
         self.rho_profile = self._api_rho_profile
-        
+
         if self.e_log:
             self._cmd_log()
 
-    def density(self, h):
+    def density(self, h: float) -> float:
         return self.rho_profile(h)
-    
-    def wind(self, h):
+
+    def wind(self, h: float) -> tuple[float, float]:
         return self.wind_profile(h)
 
-    def speed_of_sound(self, h):
+    def speed_of_sound(self, h: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         T = self._get_isa_temperature(h)
         return np.sqrt(self.gamma * self.R * T)
 
-    def dynamic_viscosity(self, h):
+    def dynamic_viscosity(self, h: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         T = self._get_isa_temperature(h)
-        return (self.beta * T**(1.5)) / (T + self.S)
+        return (self.beta * T**1.5) / (T + self.S)
 
-    def _get_isa_temperature(self, h):
+    def _get_isa_temperature(self, h: Union[float, np.ndarray]) -> np.ndarray:
         h = np.array(h, dtype=float)
-        
         T0 = 288.15
         L = 0.0065
-        
         T_trop = 216.65
         h_trop = 11000.0
+        return np.where(h <= h_trop, T0 - L * h, T_trop)
 
-        T = np.where(h <= h_trop, T0 - (L * h), T_trop)
-        return T
-
-    def _def_rho_profile(self, h):
+    def _def_rho_profile(self, h: Union[float, np.ndarray]) -> np.ndarray:
         h = np.array(h, dtype=float)
-        
         P0 = 101325.0
         T0 = 288.15
         L = 0.0065
-        
         h_trop = 11000.0
         T_trop = 216.65
         P_trop = 22632.10
-        
+
         T = self._get_isa_temperature(h)
-        
         press_trop = P0 * (1 - (L * h) / T0) ** (self.g / (self.R * L))
-        
-        exponent = -self.g * (h - h_trop) / (self.R * T_trop)
-        press_strat = P_trop * np.exp(exponent)
-        
+        press_strat = P_trop * np.exp(-self.g * (h - h_trop) / (self.R * T_trop))
         P = np.where(h <= h_trop, press_trop, press_strat)
-        
         return P / (self.R * T)
 
     @staticmethod
-    def _def_wind_profile(h):
-        h = np.array(h)
-        if h.shape:
-             return (np.zeros_like(h), np.zeros_like(h))
+    def _def_wind_profile(h: Union[float, np.ndarray]) -> tuple:
+        h = np.asarray(h)
+        if np.ndim(h) > 0:
+            return (np.zeros_like(h), np.zeros_like(h))
         return (0.0, 0.0)
 
-    def _cmd_log(self):
+    def _cmd_log(self) -> None:
         logger.info("-------ENVIRONMENT INFO --------")
         if self.lat is not None and self.lon is not None:
             logger.info(f"Coordinates:   {self.lat}, {self.lon}")
         else:
             logger.info("Coordinates:   Not Defined")
-            
         logger.info(f"Model Used:    {self.model}")
-        
         u_surf = self.u_vals[0]
         v_surf = self.v_vals[0]
         v_mag = np.sqrt(u_surf**2 + v_surf**2)
-        
         logger.info(f"Surface Wind:  U={u_surf:.2f} m/s, V={v_surf:.2f} m/s")
         logger.info(f"               Mag={v_mag:.2f} m/s")
         logger.info("--------------------------------")
-
         self._plot_profiles()
 
-    def _plot_profiles(self):
+    def _plot_profiles(self) -> None:
         if self.model == "Default":
             h_plot = np.linspace(0, 11000, 100)
             winds = [self.wind(h) for h in h_plot]
@@ -156,64 +152,72 @@ class Environment:
 
         speed_plot = np.sqrt(u_plot**2 + v_plot**2)
         math_angle = np.degrees(np.arctan2(v_plot, u_plot))
-        
         rho_plot = self.density(h_plot)
         sound_plot = self.speed_of_sound(h_plot)
         visc_plot = self.dynamic_viscosity(h_plot)
 
         fig, axs = plt.subplots(2, 3, figsize=(15, 10))
-        
-        axs[0, 0].plot(u_plot, h_plot, label='U', color='blue')
-        axs[0, 0].plot(v_plot, h_plot, label='V', color='red')
-        axs[0, 0].set_title('Wind Components (m/s)')
+
+        axs[0, 0].plot(u_plot, h_plot, label="U", color="blue")
+        axs[0, 0].plot(v_plot, h_plot, label="V", color="red")
+        axs[0, 0].set_title("Wind Components (m/s)")
         axs[0, 0].grid(True)
         axs[0, 0].legend()
 
-        axs[0, 1].plot(speed_plot, h_plot, color='black')
-        axs[0, 1].set_title('Wind Speed (m/s)')
+        axs[0, 1].plot(speed_plot, h_plot, color="black")
+        axs[0, 1].set_title("Wind Speed (m/s)")
         axs[0, 1].grid(True)
-        
-        axs[0, 2].plot(math_angle, h_plot, color='purple')
-        axs[0, 2].set_title('Wind Direction (deg)')
+
+        axs[0, 2].plot(math_angle, h_plot, color="purple")
+        axs[0, 2].set_title("Wind Direction (deg)")
         axs[0, 2].grid(True)
 
-        axs[1, 0].plot(rho_plot, h_plot, color='green')
-        axs[1, 0].set_title('Density (kg/m^3)')
-        axs[1, 0].set_xlabel('Density')
+        axs[1, 0].plot(rho_plot, h_plot, color="green")
+        axs[1, 0].set_title("Density (kg/m^3)")
+        axs[1, 0].set_xlabel("Density")
         axs[1, 0].grid(True)
 
-        axs[1, 1].plot(sound_plot, h_plot, color='orange')
-        axs[1, 1].set_title('Speed of Sound (m/s)')
-        axs[1, 1].set_xlabel('Speed')
+        axs[1, 1].plot(sound_plot, h_plot, color="orange")
+        axs[1, 1].set_title("Speed of Sound (m/s)")
+        axs[1, 1].set_xlabel("Speed")
         axs[1, 1].grid(True)
 
-        axs[1, 2].plot(visc_plot, h_plot, color='brown')
-        axs[1, 2].set_title('Dyn. Viscosity (Pa*s)')
-        axs[1, 2].set_xlabel('Viscosity')
+        axs[1, 2].plot(visc_plot, h_plot, color="brown")
+        axs[1, 2].set_title("Dyn. Viscosity (Pa*s)")
+        axs[1, 2].set_xlabel("Viscosity")
         axs[1, 2].grid(True)
 
         plt.tight_layout()
         plt.show()
 
-    def _api_wind_profile(self, h):
+    def _api_wind_profile(self, h: Union[float, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
         u_interp = np.interp(h, self.h_vals, self.u_vals)
         v_interp = np.interp(h, self.h_vals, self.v_vals)
         return (u_interp, v_interp)
 
-    def _api_rho_profile(self, h):
+    def _api_rho_profile(self, h: Union[float, np.ndarray]) -> np.ndarray:
         return np.interp(h, self.h_vals, self.rho_vals)
 
-    def _fetch_data(self, key, lat, lon, model, target_ts=None):
-        levels = ["1000h", "950h", "925h", "900h", "850h", "800h", 
-                  "700h", "600h", "500h", "400h", "300h", "200h", "150h"]
-        
+    def _fetch_data(
+        self,
+        key: str,
+        lat: float,
+        lon: float,
+        model: str,
+        target_ts: Optional[float] = None,
+    ) -> None:
+        levels = [
+            "1000h", "950h", "925h", "900h", "850h", "800h",
+            "700h", "600h", "500h", "400h", "300h", "200h", "150h",
+        ]
+
         payload = {
             "lat": lat,
             "lon": lon,
             "model": model,
             "parameters": ["wind", "temp", "gh"],
             "levels": levels,
-            "key": key
+            "key": key,
         }
 
         try:
@@ -229,12 +233,12 @@ class Environment:
         data = response.json()
         target_ts = target_ts if target_ts is not None else time.time() * 1000
         ts_arr = np.array(data["ts"])
-        idx = (np.abs(ts_arr - target_ts)).argmin()
+        idx = int((np.abs(ts_arr - target_ts)).argmin())
 
-        h_list = []
-        rho_list = []
-        u_list = []
-        v_list = []
+        h_list: list[float] = []
+        rho_list: list[float] = []
+        u_list: list[float] = []
+        v_list: list[float] = []
 
         for lvl in levels:
             key_gh = f"gh-{lvl}"
@@ -242,9 +246,7 @@ class Environment:
             key_u = f"wind_u-{lvl}"
             key_v = f"wind_v-{lvl}"
 
-            if (key_gh in data and key_temp in data and 
-                key_u in data and key_v in data):
-                
+            if key_gh in data and key_temp in data and key_u in data and key_v in data:
                 val_h = data[key_gh][idx]
                 val_temp = data[key_temp][idx]
                 val_u = data[key_u][idx]
@@ -253,7 +255,6 @@ class Environment:
                 if all(v is not None for v in [val_h, val_temp, val_u, val_v]):
                     pressure_pa = int(lvl.replace("h", "")) * 100.0
                     rho = pressure_pa / (self.R * val_temp)
-
                     h_list.append(val_h)
                     rho_list.append(rho)
                     u_list.append(val_u)
