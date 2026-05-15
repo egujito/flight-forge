@@ -22,6 +22,10 @@ class SimulationResults:
         vel: np.ndarray,
         accel: np.ndarray,
         mass: np.ndarray,
+        thrust_mag: np.ndarray,
+        drag_mag: np.ndarray,
+        mdot: np.ndarray,
+        g_mdot: np.ndarray,
     ) -> None:
         self.x = ResultField(time, pos[:, 0], "X Position", "m", "blue")
         self.y = ResultField(time, pos[:, 1], "Y Position", "m", "green")
@@ -42,6 +46,10 @@ class SimulationResults:
         )
 
         self.mass = ResultField(time, mass, "Mass", "kg", "purple")
+        self.thrust = ResultField(time, thrust_mag, "Thrust Force", "N", "orange")
+        self.drag = ResultField(time, drag_mag, "Drag Force", "N", "magenta")
+        self.total_mdot = ResultField(time, mdot, "Total Mdot", "kg/s", "red")
+        self.grain_mdot = ResultField(time, g_mdot, "Grain Mdot", "kg/s", "darkred")
 
     def trajectory_3d(self) -> None:
         fig = plt.figure(figsize=(10, 8))
@@ -323,19 +331,10 @@ class Simulation:
             np.array(hist_vel),
             np.array(hist_accel),
             np.array(hist_mass),
-        )
-
-        self.motor.thrust = ResultField(
-            time_arr, np.array(hist_thrust_mag), "Thrust Force", "N", "orange"
-        )
-        self.motor.total_mdot = ResultField(
-            time_arr, np.array(hist_mdot), "Total Mdot", "kg/s", "red"
-        )
-        self.motor.grain_mdot = ResultField(
-            time_arr, np.array(hist_g_mdot), "Grain Mdot", "kg/s", "darkred"
-        )
-        self.rocket.drag = ResultField(
-            time_arr, np.array(hist_drag_mag), "Drag Force", "N", "magenta"
+            np.array(hist_thrust_mag),
+            np.array(hist_drag_mag),
+            np.array(hist_mdot),
+            np.array(hist_g_mdot),
         )
 
         return self.results
