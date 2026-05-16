@@ -1023,8 +1023,10 @@ def _parse_sweep_values(text: str) -> list[float]:
     text = text.strip()
     if text.startswith("linspace("):
         inner = text[9:].rstrip(")")
-        parts = [float(x) for x in inner.split(",")]
-        return list(np.linspace(*parts))
+        parts = [x.strip() for x in inner.split(",")]
+        if len(parts) == 3:
+            return list(np.linspace(float(parts[0]), float(parts[1]), int(parts[2])))
+        return list(np.linspace(float(parts[0]), float(parts[1])))
     return [float(x.strip()) for x in text.split(",") if x.strip()]
 
 
