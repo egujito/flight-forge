@@ -51,6 +51,8 @@ from flightForge import Environment, Motor, Parachute, Rocket, Simulation
 from flightForge.extras import Campaign
 from flightForge.extras.analysis import apogee_histogram, landing_scatter, sensitivity_tornado
 from flightForge.extras.param import Param
+from flightForge.extras.results import CampaignResults
+from flightForge.extras.runner import BaseObjects, execute_run
 from flightForge.utils import logarithmic_thrust
 
 UPDATE_EVERY = 50
@@ -994,13 +996,18 @@ class ResultsTab(QWidget):
 # ---------------------------------------------------------------------------
 
 _SWEEP_PATHS = [
+    # Rocket structure
     "rocket.dry_mass",
+    "rocket.ref_area",
+    # Motor
     "rocket.motor.burn_time",
     "rocket.motor.initial_grain_mass",
     "rocket.motor.initial_ox_mass",
     "rocket.motor.ox_mdot",
-    "env.lat",
-    "env.lon",
+    # Launch parameters (routed via sim.* → sim_kwargs)
+    "sim.inclination",
+    "sim.heading",
+    "sim.rail_length",
 ]
 
 _CAMPAIGN_METRICS = [
@@ -1168,14 +1175,29 @@ class CampaignWorker(QThread):
         self._n_workers = n_workers
 
     def run(self) -> None:
+        specs = self._campaign.specs
+        total = len(specs)
+        base = BaseObjects(
+            env=self._campaign.environment,
+            rocket=self._campaign.rocket,
+        )
         try:
-            total = len(self._campaign.specs)
             self.progress.emit(0, total)
-            results = self._campaign.run(
-                n_workers=self._n_workers, show_progress=False
-            )
-            self.progress.emit(total, total)
-            self.run_finished.emit(results)
+            if self._n_workers <= 1:
+                # Sequential — emit progress after every run
+                pairs: list = []
+                for i, spec in enumerate(specs):
+                    pairs.append(execute_run(base, spec))
+                    self.progress.emit(i + 1, total)
+                pairs.sort(key=lambda r: specs.index(r[0]))
+                self.run_finished.emit(CampaignResults(pairs))
+            else:
+                # Parallel via campaign.run — progress only at finish
+                results = self._campaign.run(
+                    n_workers=self._n_workers, show_progress=False
+                )
+                self.progress.emit(total, total)
+                self.run_finished.emit(results)
         except Exception as exc:
             self.run_error.emit(str(exc))
 
