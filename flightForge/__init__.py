@@ -18,4 +18,5 @@ __all__ = [
     "extras",
     "logarithmic_thrust",
     "logger",
+    "utils"
 ]

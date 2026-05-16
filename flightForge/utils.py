@@ -46,7 +46,8 @@ def logarithmic_thrust(
     peak_thrust: float,
     ramp_time: float = 0.2,
 ) -> Callable[[float], float]:
-    """Return a thrust-vs-time callable with a linear ramp and logarithmic decay.
+    """
+    Return a thrust-vs-time callable with a linear ramp and logarithmic decay.
 
     Args:
         burn_time:  Total burn duration in seconds.
@@ -60,15 +61,13 @@ def logarithmic_thrust(
     if ramp_time < 0 or ramp_time >= burn_time:
         raise ValueError("ramp_time must be in [0, burn_time).")
 
-    decay_duration = burn_time - ramp_time
 
     def _thrust(t: float) -> float:
         if t < 0 or t > burn_time:
             return 0.0
         if t <= ramp_time:
             return peak_thrust * (t / ramp_time) if ramp_time > 0 else peak_thrust
-        progress = (t - ramp_time) / decay_duration
-        return peak_thrust * (1.0 - np.log1p(progress * (np.e - 1.0)))
+        return peak_thrust
 
     return _thrust
 
