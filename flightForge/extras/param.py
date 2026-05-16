@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Union
+from typing import Any, Callable, Iterable, Optional, Union
 
 import numpy as np
+from scipy import stats
 
 
 @dataclass(frozen=True)
@@ -24,12 +25,19 @@ class SweepParam:
 class StochasticParam:
     """A distribution sampled once per run.
 
-    The sampler is a callable taking a numpy ``Generator`` and returning a
-    concrete value. Resolution happens at spec-build time so the worker
-    processes never see the sampler itself.
+    Attributes:
+        sampler:     Callable ``(rng) -> value`` used for random Monte Carlo.
+        ppf:         Optional inverse CDF ``(u in [0, 1]) -> value`` enabling
+                     Latin Hypercube sampling. ``None`` if the distribution
+                     does not expose a usable quantile function.
+        description: Short human-readable summary used in reports.
+
+    Resolution happens at spec-build time so worker processes never see the
+    sampler or ppf themselves — only the concrete values they produce.
     """
 
     sampler: Callable[[np.random.Generator], Any]
+    ppf: Optional[Callable[[float], Any]] = None
     description: str = ""
 
 
@@ -70,6 +78,7 @@ class Param:
             raise ValueError("sigma must be non-negative.")
         return StochasticParam(
             sampler=lambda rng: float(rng.normal(mu, sigma)),
+            ppf=lambda u: float(stats.norm.ppf(u, loc=mu, scale=sigma)),
             description=f"N({mu}, {sigma})",
         )
 
@@ -78,8 +87,10 @@ class Param:
         """Return a uniform-distributed parameter on the half-open interval [lo, hi)."""
         if hi <= lo:
             raise ValueError("hi must be greater than lo.")
+        span = hi - lo
         return StochasticParam(
             sampler=lambda rng: float(rng.uniform(lo, hi)),
+            ppf=lambda u: float(lo + span * u),
             description=f"U[{lo}, {hi})",
         )
 
@@ -87,11 +98,15 @@ class Param:
     def from_dist(dist: Any) -> StochasticParam:
         """Wrap any object exposing an ``rvs(random_state=...)`` method.
 
-        Compatible with ``scipy.stats`` frozen distributions.
+        Compatible with ``scipy.stats`` frozen distributions. If ``dist`` also
+        exposes a ``ppf`` method, the parameter becomes usable with Latin
+        Hypercube sampling.
         """
         if not hasattr(dist, "rvs"):
             raise TypeError("dist must expose an 'rvs' method (e.g. scipy.stats frozen rv).")
+        ppf = (lambda u: float(dist.ppf(u))) if hasattr(dist, "ppf") else None
         return StochasticParam(
             sampler=lambda rng: float(dist.rvs(random_state=rng)),
+            ppf=ppf,
             description=str(dist),
         )
