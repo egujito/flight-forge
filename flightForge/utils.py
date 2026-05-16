@@ -25,7 +25,7 @@ def _func_from_csv(path: str) -> tuple[interp1d, np.ndarray, np.ndarray]:
     x_arr = np.array(x_vals)
     y_arr = np.array(y_vals)
     return (
-        interp1d(x_arr, y_arr, kind="linear", fill_value=0, bounds_error=False),
+        interp1d(x_arr, y_arr, kind="linear", fill_value="extrapolate", bounds_error=False),
         x_arr,
         y_arr,
     )

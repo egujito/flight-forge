@@ -88,17 +88,52 @@ def _resolve_root(base: BaseObjects, path: str) -> tuple[Any, str]:
 def execute_run(base: BaseObjects, spec: RunSpec) -> tuple[RunSpec, FlightData]:
     """Apply ``spec.overrides`` to a deep copy of ``base`` and run a simulation.
 
+    Special override roots:
+
+    - ``"sim.*"`` — merged into ``sim_kwargs`` (e.g. ``"sim.inclination"``).
+    - ``"env.wind_u"`` / ``"env.wind_v"`` — virtual scalar paths (m/s) that
+      replace ``env.wind_profile`` with a height-constant wind callable.
+      These are not stored attributes on ``Environment``, so they bypass
+      ``deep_set`` entirely.
+
     This function is module-level (not a method) so it can be pickled and
     dispatched by :class:`concurrent.futures.ProcessPoolExecutor`.
     """
     local = BaseObjects(env=copy.deepcopy(base.env), rocket=copy.deepcopy(base.rocket))
 
-    for path, value in spec.overrides.items():
-        root, tail = _resolve_root(local, path)
-        if not tail:
-            raise KeyError(f"Override path '{path}' must include an attribute after the root.")
-        deep_set(root, tail, value)
+    _WIND_VIRTUAL = {"env.wind_u", "env.wind_v"}
 
-    sim = Simulation(local.env, local.rocket, **spec.sim_kwargs)
+    sim_overrides: dict[str, Any] = {}
+    for path, value in spec.overrides.items():
+        if path in _WIND_VIRTUAL:
+            continue  # resolved below after the loop
+        if path.startswith("sim."):
+            sim_overrides[path[4:]] = value
+        else:
+            root, tail = _resolve_root(local, path)
+            if not tail:
+                raise KeyError(f"Override path '{path}' must include an attribute after the root.")
+            deep_set(root, tail, value)
+
+    if _WIND_VIRTUAL & spec.overrides.keys():
+        u = float(spec.overrides.get("env.wind_u", 0.0))
+        v = float(spec.overrides.get("env.wind_v", 0.0))
+        local.env.wind_profile = _ConstantWind(u, v)
+
+    sim_kwargs = {**spec.sim_kwargs, **sim_overrides}
+    sim = Simulation(local.env, local.rocket, **sim_kwargs)
     flight = sim.run(**spec.run_kwargs)
     return spec, flight
+
+
+class _ConstantWind:
+    """Picklable constant-wind callable for env.wind_profile overrides."""
+
+    __slots__ = ("u", "v")
+
+    def __init__(self, u: float, v: float) -> None:
+        self.u = u
+        self.v = v
+
+    def __call__(self, _h: float) -> tuple[float, float]:
+        return (self.u, self.v)
