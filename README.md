@@ -110,8 +110,7 @@ Parachute sequencing
 
 Rail departure logic
   Rocket stays aligned to the rail direction until it has travelled
-  rail_length metres; aerodynamic forces only apply after that.
-
+  rail_length metres
 Adaptive integration
   RK45 with configurable tolerances (rtol, atol). Fixed-step RK4 available.
 
@@ -123,7 +122,7 @@ FlightData queries
   at_time(t, array) and at_height(h, array) interpolate any stored array
   to an exact point.
 
-Live plotting
+Live plotting [do not use on .ipynb]
   Real-time 3D trajectory, altitude, and velocity windows that update while
   the simulation runs.
 
@@ -147,7 +146,7 @@ GUI
 ```
 Wind sweep script
   wind_sweep_test.py: a 2D grid of surface wind conditions run as a
-  campaign, producing a landing-scatter heatmap.
+  campaign, producing an apogee distribution heatmap.
 ```
 
 ![Wind sweep results](img/wind_sweep_results.png)
