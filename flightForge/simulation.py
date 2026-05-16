@@ -260,6 +260,7 @@ class Simulation:
         hist_thrust_mag: list[float] = []
         hist_drag_mag: list[float] = []
         hist_mdot: list[float] = []
+        hist_ox_mdot: list[float] = []
         hist_g_mdot: list[float] = []
         hist_mach: list[float] = []
 
@@ -286,6 +287,7 @@ class Simulation:
             drag_vec = -cd * self.rocket.ref_area * 0.5 * rho * v_mag**2 * v_dir
 
             mdot, g_mdot = self.motor._get_mdot(t, burning)
+            ox_mdot_val = self.motor.ox_mdot if (burning and m_ox > 0) else 0.0
 
             hist_t.append(t)
             hist_pos.append(pos.copy())
@@ -295,6 +297,7 @@ class Simulation:
             hist_thrust_mag.append(float(np.linalg.norm(thrust_vec)))
             hist_drag_mag.append(float(np.linalg.norm(drag_vec)))
             hist_mdot.append(mdot)
+            hist_ox_mdot.append(ox_mdot_val)
             hist_g_mdot.append(g_mdot)
             hist_mach.append(float(mach))
 
@@ -347,6 +350,7 @@ class Simulation:
             np.array(hist_thrust_mag),
             np.array(hist_drag_mag),
             np.array(hist_mdot),
+            np.array(hist_ox_mdot),
             np.array(hist_g_mdot),
             np.array(hist_mach),
         )

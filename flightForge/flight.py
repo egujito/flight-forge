@@ -19,6 +19,7 @@ class FlightData:
         thrust_mag: np.ndarray,
         drag_mag: np.ndarray,
         mdot: np.ndarray,
+        ox_mdot: np.ndarray,
         g_mdot: np.ndarray,
         mach: np.ndarray,
     ) -> None:
@@ -42,6 +43,7 @@ class FlightData:
         self.thrust = thrust_mag
         self.drag = drag_mag
         self.total_mdot = mdot
+        self.ox_mdot = ox_mdot
         self.grain_mdot = g_mdot
         self.mach = mach
 
