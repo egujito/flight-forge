@@ -1,3 +1,4 @@
+from . import extras
 from .environment import Environment
 from .flight import FlightData
 from .motor import Motor
@@ -14,6 +15,7 @@ __all__ = [
     "Parachute",
     "Rocket",
     "Simulation",
+    "extras",
     "logarithmic_thrust",
     "logger",
 ]
