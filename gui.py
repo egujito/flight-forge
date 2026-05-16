@@ -13,7 +13,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
-from PySide6.QtCore import QDate, Qt, QThread, Signal
+from PySide6.QtCore import QDate, QObject, Qt, QThread, Signal
 from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import (
     QApplication,
@@ -31,10 +31,14 @@ from PySide6.QtWidgets import (
     QListWidget,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QRadioButton,
+    QScrollArea,
     QSizePolicy,
+    QSpinBox,
     QSplitter,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -44,6 +48,9 @@ from PySide6.QtWidgets import (
 )
 
 from flightForge import Environment, Motor, Parachute, Rocket, Simulation
+from flightForge.extras import Campaign
+from flightForge.extras.analysis import apogee_histogram, landing_scatter, sensitivity_tornado
+from flightForge.extras.param import Param
 from flightForge.utils import logarithmic_thrust
 
 UPDATE_EVERY = 50
@@ -247,21 +254,19 @@ class LiveCanvas3D(FigureCanvasQTAgg):
 # GUILogHandler
 # ---------------------------------------------------------------------------
 
-from PySide6.QtCore import QObject, Signal # Ensure QObject is imported
-
-class LogEmitter(QObject):
+class _LogEmitter(QObject):
     sig_log = Signal(str)
+
 
 class GUILogHandler(logging.Handler):
     _ansi = re.compile(r"\x1b\[[0-9;]*[mK]")
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.emitter = LogEmitter()
+        self.emitter = _LogEmitter()
 
     def emit(self, record: logging.LogRecord) -> None:
         msg = self._ansi.sub("", self.format(record))
-        # Safely emit the string across threads
         self.emitter.sig_log.emit(msg)
 
 
@@ -985,6 +990,449 @@ class ResultsTab(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# Campaign helpers
+# ---------------------------------------------------------------------------
+
+_SWEEP_PATHS = [
+    "rocket.dry_mass",
+    "rocket.motor.burn_time",
+    "rocket.motor.initial_grain_mass",
+    "rocket.motor.initial_ox_mass",
+    "rocket.motor.ox_mdot",
+    "env.lat",
+    "env.lon",
+]
+
+_CAMPAIGN_METRICS = [
+    "apogee_m", "apogee_t", "max_speed_ms", "max_mach",
+    "max_accel_ms2", "final_t", "final_range_m",
+]
+
+
+def _parse_sweep_values(text: str) -> list[float]:
+    text = text.strip()
+    if text.startswith("linspace("):
+        inner = text[9:].rstrip(")")
+        parts = [float(x) for x in inner.split(",")]
+        return list(np.linspace(*parts))
+    return [float(x.strip()) for x in text.split(",") if x.strip()]
+
+
+def _build_base_objects(cfg: dict):
+    """Build Environment + Rocket (with motor and parachutes) from a config dict."""
+    env = Environment()
+    if cfg["env"]["use_api"]:
+        if not cfg["env"]["api_key"]:
+            raise ValueError("Windy API key is empty.")
+        env.set_model(
+            cfg["env"]["api_key"],
+            cfg["env"]["lat"],
+            cfg["env"]["lon"],
+            cfg["env"]["model"],
+            (cfg["env"]["day"], cfg["env"]["month"], cfg["env"]["year"]),
+        )
+
+    m = cfg["motor"]
+    if m["thrust_type"] == "csv":
+        if not os.path.isfile(m["csv_path"]):
+            raise ValueError(f"Thrust CSV not found: {m['csv_path']}")
+        thrust_src = m["csv_path"]
+    else:
+        thrust_src = logarithmic_thrust(m["burn_time"], m["peak_thrust"], m["ramp_time"])
+
+    motor = Motor(
+        thrust_src,
+        m["burn_time"],
+        ox_mdot=m["ox_mdot"],
+        initial_ox_mass=m["initial_ox_mass"],
+        initial_grain_mass=m["initial_grain_mass"],
+    )
+
+    r = cfg["rocket"]
+    if not os.path.isfile(r["drag_csv"]):
+        raise ValueError(f"Drag CSV not found: {r['drag_csv']}")
+    rocket = Rocket(r["dry_mass"], r["drag_csv"], r["dim"])
+    rocket.add_motor(motor)
+    for p in cfg["parachutes"]:
+        rocket.add_parachute(Parachute(p["name"], p["cd_s"], p["lag"], p["trigger"]))
+
+    return env, rocket
+
+
+# ---------------------------------------------------------------------------
+# SweepRowWidget
+# ---------------------------------------------------------------------------
+
+class SweepRowWidget(QWidget):
+    removed = Signal(object)
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 2, 0, 2)
+
+        self.path_combo = QComboBox()
+        self.path_combo.setEditable(True)
+        self.path_combo.addItems(_SWEEP_PATHS)
+        self.path_combo.setMinimumWidth(220)
+
+        self.type_combo = QComboBox()
+        self.type_combo.addItems(["Sweep", "Normal", "Uniform"])
+
+        self._stack = QStackedWidget()
+
+        # page 0 — Sweep values
+        sweep_w = QWidget()
+        sweep_l = QHBoxLayout(sweep_w)
+        sweep_l.setContentsMargins(0, 0, 0, 0)
+        self.sweep_edit = QLineEdit()
+        self.sweep_edit.setPlaceholderText("e.g. 38, 40, 42  or  linspace(35,50,8)")
+        sweep_l.addWidget(self.sweep_edit)
+        self._stack.addWidget(sweep_w)
+
+        # page 1 — Normal(mu, sigma)
+        norm_w = QWidget()
+        norm_l = QHBoxLayout(norm_w)
+        norm_l.setContentsMargins(0, 0, 0, 0)
+        self.norm_mu = QDoubleSpinBox()
+        self.norm_mu.setRange(-1e9, 1e9)
+        self.norm_mu.setDecimals(4)
+        self.norm_mu.setPrefix("μ ")
+        self.norm_sigma = QDoubleSpinBox()
+        self.norm_sigma.setRange(0, 1e9)
+        self.norm_sigma.setDecimals(4)
+        self.norm_sigma.setPrefix("σ ")
+        norm_l.addWidget(self.norm_mu)
+        norm_l.addWidget(self.norm_sigma)
+        self._stack.addWidget(norm_w)
+
+        # page 2 — Uniform(lo, hi)
+        uni_w = QWidget()
+        uni_l = QHBoxLayout(uni_w)
+        uni_l.setContentsMargins(0, 0, 0, 0)
+        self.uni_lo = QDoubleSpinBox()
+        self.uni_lo.setRange(-1e9, 1e9)
+        self.uni_lo.setDecimals(4)
+        self.uni_lo.setPrefix("lo ")
+        self.uni_hi = QDoubleSpinBox()
+        self.uni_hi.setRange(-1e9, 1e9)
+        self.uni_hi.setDecimals(4)
+        self.uni_hi.setPrefix("hi ")
+        uni_l.addWidget(self.uni_lo)
+        uni_l.addWidget(self.uni_hi)
+        self._stack.addWidget(uni_w)
+
+        self.type_combo.currentIndexChanged.connect(self._stack.setCurrentIndex)
+
+        btn_del = QPushButton("×")
+        btn_del.setFixedWidth(28)
+        btn_del.setStyleSheet("QPushButton { color: #f44747; font-weight: bold; }")
+        btn_del.clicked.connect(lambda: self.removed.emit(self))
+
+        row.addWidget(self.path_combo)
+        row.addWidget(self.type_combo)
+        row.addWidget(self._stack)
+        row.addWidget(btn_del)
+
+    def get_param(self) -> tuple[str, object]:
+        path = self.path_combo.currentText().strip()
+        if not path:
+            raise ValueError("Sweep path is empty.")
+        kind = self.type_combo.currentText()
+        if kind == "Sweep":
+            vals = _parse_sweep_values(self.sweep_edit.text())
+            if not vals:
+                raise ValueError(f"No values for path '{path}'.")
+            return path, Param.sweep(vals)
+        if kind == "Normal":
+            return path, Param.normal(self.norm_mu.value(), self.norm_sigma.value())
+        # Uniform
+        lo, hi = self.uni_lo.value(), self.uni_hi.value()
+        if hi <= lo:
+            raise ValueError(f"Uniform hi must be > lo for path '{path}'.")
+        return path, Param.uniform(lo, hi)
+
+
+# ---------------------------------------------------------------------------
+# CampaignWorker
+# ---------------------------------------------------------------------------
+
+class CampaignWorker(QThread):
+    progress = Signal(int, int)
+    run_finished = Signal(object)
+    run_error = Signal(str)
+
+    def __init__(self, campaign: Campaign, n_workers: int) -> None:
+        super().__init__()
+        self._campaign = campaign
+        self._n_workers = n_workers
+
+    def run(self) -> None:
+        try:
+            total = len(self._campaign.specs)
+            self.progress.emit(0, total)
+            results = self._campaign.run(
+                n_workers=self._n_workers, show_progress=False
+            )
+            self.progress.emit(total, total)
+            self.run_finished.emit(results)
+        except Exception as exc:
+            self.run_error.emit(str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Tab: Campaign
+# ---------------------------------------------------------------------------
+
+class CampaignTab(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self._sweep_rows: list[SweepRowWidget] = []
+        self._results = None
+        self._worker: Optional[CampaignWorker] = None
+
+        splitter = QSplitter(Qt.Vertical)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(splitter)
+
+        # ---- top: configuration ----
+        cfg_widget = QWidget()
+        cfg_widget.setMinimumHeight(260)
+        cfg_layout = QVBoxLayout(cfg_widget)
+        cfg_layout.setContentsMargins(6, 6, 6, 4)
+
+        # sweep rows area
+        sweep_box = QGroupBox("Sweep Parameters")
+        sweep_vl = QVBoxLayout(sweep_box)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMaximumHeight(180)
+        self._rows_container = QWidget()
+        self._rows_layout = QVBoxLayout(self._rows_container)
+        self._rows_layout.setAlignment(Qt.AlignTop)
+        self._rows_layout.setSpacing(2)
+        scroll.setWidget(self._rows_container)
+        sweep_vl.addWidget(scroll)
+        btn_add_row = QPushButton("+ Add Parameter")
+        btn_add_row.clicked.connect(self._add_row)
+        sweep_vl.addWidget(btn_add_row)
+        cfg_layout.addWidget(sweep_box)
+
+        # campaign options
+        opts_box = QGroupBox("Campaign Options")
+        opts_form = QFormLayout(opts_box)
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItems(["grid", "zip", "random", "lhs"])
+        self.n_runs_spin = QSpinBox()
+        self.n_runs_spin.setRange(2, 10000)
+        self.n_runs_spin.setValue(50)
+        self.n_runs_spin.setEnabled(False)
+        self.workers_spin = QSpinBox()
+        self.workers_spin.setRange(1, 16)
+        self.workers_spin.setValue(1)
+        self.seed_spin = QSpinBox()
+        self.seed_spin.setRange(0, 999999)
+        self.seed_spin.setValue(0)
+        self.seed_spin.setSpecialValueText("No seed")
+        self.label_edit = QLineEdit("campaign")
+        opts_form.addRow("Mode:", self.mode_combo)
+        opts_form.addRow("N runs (random/lhs):", self.n_runs_spin)
+        opts_form.addRow("Workers:", self.workers_spin)
+        opts_form.addRow("Seed:", self.seed_spin)
+        opts_form.addRow("Label:", self.label_edit)
+        self.mode_combo.currentTextChanged.connect(
+            lambda m: self.n_runs_spin.setEnabled(m in ("random", "lhs"))
+        )
+        cfg_layout.addWidget(opts_box)
+
+        # run bar
+        run_bar = QHBoxLayout()
+        self.run_btn = QPushButton("Run Campaign")
+        self.run_btn.setStyleSheet(
+            "font-weight: bold; padding: 5px 16px; background: #1a4a8a; border-color: #2a6abf;"
+        )
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setValue(0)
+        self.status_lbl = QLabel("Ready")
+        self.status_lbl.setStyleSheet("color: #888; margin-left: 8px;")
+        run_bar.addWidget(self.run_btn)
+        run_bar.addWidget(self.progress_bar, 1)
+        run_bar.addWidget(self.status_lbl)
+        cfg_layout.addLayout(run_bar)
+        splitter.addWidget(cfg_widget)
+
+        # ---- bottom: results ----
+        results_widget = QWidget()
+        res_layout = QVBoxLayout(results_widget)
+        res_layout.setContentsMargins(6, 4, 6, 6)
+
+        # summary table
+        summary_box = QGroupBox("Summary")
+        summary_vl = QVBoxLayout(summary_box)
+        self.summary_table = QTableWidget(0, 0)
+        self.summary_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.summary_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        summary_vl.addWidget(self.summary_table)
+        res_layout.addWidget(summary_box)
+
+        # analysis plots
+        analysis_box = QGroupBox("Analysis")
+        analysis_vl = QVBoxLayout(analysis_box)
+        plot_ctrl = QHBoxLayout()
+        self.plot_type_combo = QComboBox()
+        self.plot_type_combo.addItems(
+            ["Envelope", "Landing Scatter", "Apogee Histogram", "Sensitivity Tornado"]
+        )
+        self.plot_channel_combo = QComboBox()
+        self.plot_channel_combo.addItems(CHANNELS)
+        self.plot_channel_combo.setCurrentText("z")
+        self.plot_metric_combo = QComboBox()
+        self.plot_metric_combo.addItems(_CAMPAIGN_METRICS)
+        self.plot_metric_combo.hide()
+        btn_plot = QPushButton("Plot")
+        btn_plot.clicked.connect(self._do_analysis_plot)
+        plot_ctrl.addWidget(QLabel("Plot:"))
+        plot_ctrl.addWidget(self.plot_type_combo)
+        plot_ctrl.addWidget(self.plot_channel_combo)
+        plot_ctrl.addWidget(self.plot_metric_combo)
+        plot_ctrl.addWidget(btn_plot)
+        plot_ctrl.addStretch()
+        self.plot_type_combo.currentTextChanged.connect(self._on_plot_type_change)
+        analysis_vl.addLayout(plot_ctrl)
+
+        fig = Figure(facecolor="#1e1e1e", tight_layout=True)
+        self.campaign_canvas = FigureCanvasQTAgg(fig)
+        self.campaign_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._camp_fig = fig
+        analysis_vl.addWidget(self.campaign_canvas)
+        res_layout.addWidget(analysis_box)
+        splitter.addWidget(results_widget)
+        splitter.setSizes([300, 600])
+
+    def _add_row(self) -> None:
+        row = SweepRowWidget()
+        row.removed.connect(self._remove_row)
+        self._sweep_rows.append(row)
+        self._rows_layout.addWidget(row)
+
+    def _remove_row(self, row: SweepRowWidget) -> None:
+        self._sweep_rows.remove(row)
+        self._rows_layout.removeWidget(row)
+        row.deleteLater()
+
+    def _on_plot_type_change(self, ptype: str) -> None:
+        self.plot_channel_combo.setVisible(ptype == "Envelope")
+        self.plot_metric_combo.setVisible(ptype == "Sensitivity Tornado")
+
+    def build_campaign(self, base_cfg: dict) -> Campaign:
+        env, rocket = _build_base_objects(base_cfg)
+        s = base_cfg["sim"]
+        sim_kwargs = {
+            "rail_length": s["rail_length"],
+            "inclination": s["inclination"],
+            "heading": s["heading"],
+        }
+        run_kwargs: dict = {"terminate_on": s["terminate_on"], "method": s["method"]}
+        if s["method"] == "RK45":
+            run_kwargs.update(
+                {"rtol": s["rtol"], "atol": s["atol"],
+                 "max_step": s["max_step"], "t_max": s["t_max"]}
+            )
+        else:
+            run_kwargs.update({"dt": s["dt"], "t_max": s["t_max"]})
+
+        camp = Campaign(
+            env, rocket,
+            sim_kwargs=sim_kwargs,
+            run_kwargs=run_kwargs,
+            label=self.label_edit.text().strip() or "campaign",
+        )
+
+        if not self._sweep_rows:
+            raise ValueError("Add at least one sweep parameter before running a campaign.")
+
+        params = {}
+        for row in self._sweep_rows:
+            path, param = row.get_param()
+            params[path] = param
+
+        mode = self.mode_combo.currentText()
+        seed_val = self.seed_spin.value()
+        seed = seed_val if seed_val > 0 else None
+        n = self.n_runs_spin.value() if mode in ("random", "lhs") else None
+        camp.sweep_multiple(params, mode=mode, n=n, seed=seed)
+        return camp
+
+    def set_running(self, running: bool) -> None:
+        self.run_btn.setEnabled(not running)
+        self.status_lbl.setText("Running…" if running else "Ready")
+        self.status_lbl.setStyleSheet(
+            "color: #4ec9b0; margin-left: 8px;"
+            if running else "color: #888; margin-left: 8px;"
+        )
+
+    def on_progress(self, done: int, total: int) -> None:
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(done)
+        self.status_lbl.setText(f"{done}/{total}")
+
+    def populate_results(self, results) -> None:
+        self._results = results
+        df = results.summary()
+        self.summary_table.setRowCount(len(df))
+        self.summary_table.setColumnCount(len(df.columns))
+        self.summary_table.setHorizontalHeaderLabels(list(df.columns))
+        for i, row in df.iterrows():
+            for j, val in enumerate(row):
+                text = f"{val:.4g}" if isinstance(val, float) else str(val)
+                item = QTableWidgetItem(text)
+                item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.summary_table.setItem(i, j, item)
+
+    def _do_analysis_plot(self) -> None:
+        if self._results is None:
+            QMessageBox.information(self, "No Results", "Run a campaign first.")
+            return
+        ptype = self.plot_type_combo.currentText()
+        self._camp_fig.clear()
+        ax = self._camp_fig.add_subplot(111)
+        ax.set_facecolor("#2d2d2d")
+        for spine in ax.spines.values():
+            spine.set_color("#555555")
+        ax.tick_params(colors="#888888", labelsize=8)
+        ax.xaxis.label.set_color("#aaaaaa")
+        ax.yaxis.label.set_color("#aaaaaa")
+        ax.title.set_color("#d4d4d4")
+        ax.grid(True, alpha=0.2, color="#555555")
+        try:
+            if ptype == "Envelope":
+                self._results.plot_envelope(
+                    channel=self.plot_channel_combo.currentText(),
+                    x_channel="t",
+                    ax=ax,
+                )
+            elif ptype == "Landing Scatter":
+                landing_scatter(self._results, ax=ax)
+            elif ptype == "Apogee Histogram":
+                apogee_histogram(self._results, ax=ax)
+            else:
+                sensitivity_tornado(
+                    self._results,
+                    metric=self.plot_metric_combo.currentText(),
+                    ax=ax,
+                )
+        except Exception as exc:
+            ax.text(
+                0.5, 0.5, str(exc),
+                ha="center", va="center", color="#f44747",
+                transform=ax.transAxes, wrap=True,
+            )
+        self.campaign_canvas.draw_idle()
+
+
+# ---------------------------------------------------------------------------
 # MainWindow
 # ---------------------------------------------------------------------------
 
@@ -994,6 +1442,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("flightForge  —  3DOF Simulator")
         self.resize(1400, 900)
         self._worker: Optional[SimulationWorker] = None
+        self._campaign_worker: Optional[CampaignWorker] = None
 
         tabs = QTabWidget()
         self.env_tab = EnvironmentTab()
@@ -1003,19 +1452,22 @@ class MainWindow(QMainWindow):
         self.sim_tab = SimSettingsTab()
         self.run_tab = RunTab()
         self.results_tab = ResultsTab()
+        self.campaign_tab = CampaignTab()
 
-        tabs.addTab(self.env_tab,     "Environment")
-        tabs.addTab(self.motor_tab,   "Motor")
-        tabs.addTab(self.rocket_tab,  "Rocket")
-        tabs.addTab(self.chutes_tab,  "Parachutes")
-        tabs.addTab(self.sim_tab,     "Simulation")
-        tabs.addTab(self.run_tab,     "Run & Monitor")
-        tabs.addTab(self.results_tab, "Results")
+        tabs.addTab(self.env_tab,      "Environment")
+        tabs.addTab(self.motor_tab,    "Motor")
+        tabs.addTab(self.rocket_tab,   "Rocket")
+        tabs.addTab(self.chutes_tab,   "Parachutes")
+        tabs.addTab(self.sim_tab,      "Simulation")
+        tabs.addTab(self.run_tab,      "Run & Monitor")
+        tabs.addTab(self.results_tab,  "Results")
+        tabs.addTab(self.campaign_tab, "Campaign")
         self.setCentralWidget(tabs)
         self._tabs = tabs
 
         self.run_tab.run_btn.clicked.connect(self._on_run)
         self.run_tab.stop_btn.clicked.connect(self._on_stop)
+        self.campaign_tab.run_btn.clicked.connect(self._on_campaign_run)
 
         self._log_handler = GUILogHandler()
         self._log_handler.setFormatter(logging.Formatter("%(message)s"))
@@ -1076,6 +1528,36 @@ class MainWindow(QMainWindow):
         self.run_tab.status_lbl.setText("Error")
         self.run_tab.status_lbl.setStyleSheet("color: #f44747; margin-left: 12px;")
         QMessageBox.warning(self, "Simulation Error", msg)
+
+    def _on_campaign_run(self) -> None:
+        if self._campaign_worker and self._campaign_worker.isRunning():
+            return
+        try:
+            base_cfg = self._collect_config()
+            campaign = self.campaign_tab.build_campaign(base_cfg)
+        except ValueError as exc:
+            QMessageBox.critical(self, "Campaign Configuration Error", str(exc))
+            return
+
+        self.campaign_tab.set_running(True)
+        self.campaign_tab.progress_bar.setValue(0)
+        self._campaign_worker = CampaignWorker(campaign, self.campaign_tab.workers_spin.value())
+        self._campaign_worker.progress.connect(self.campaign_tab.on_progress)
+        self._campaign_worker.run_finished.connect(self._on_campaign_finished)
+        self._campaign_worker.run_error.connect(self._on_campaign_error)
+        self._campaign_worker.start()
+
+    def _on_campaign_finished(self, results) -> None:
+        self.campaign_tab.set_running(False)
+        self.campaign_tab.status_lbl.setText(f"Done — {len(results)} runs")
+        self.campaign_tab.status_lbl.setStyleSheet("color: #4ec9b0; margin-left: 8px; font-weight: bold;")
+        self.campaign_tab.populate_results(results)
+
+    def _on_campaign_error(self, msg: str) -> None:
+        self.campaign_tab.set_running(False)
+        self.campaign_tab.status_lbl.setText("Error")
+        self.campaign_tab.status_lbl.setStyleSheet("color: #f44747; margin-left: 8px;")
+        QMessageBox.warning(self, "Campaign Error", msg)
 
 
 # ---------------------------------------------------------------------------
