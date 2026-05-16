@@ -8,8 +8,8 @@ from typing import Any, Iterable, Optional
 import numpy as np
 from scipy.stats import qmc
 
-from ..flight import FlightData
 from .param import StochasticParam, SweepParam
+from .results import CampaignResults
 from .runner import BaseObjects, RunSpec, execute_run
 
 
@@ -177,8 +177,8 @@ class Campaign:
         self,
         n_workers: int = 4,
         show_progress: bool = True,
-    ) -> list[tuple[RunSpec, FlightData]]:
-        """Execute every enqueued spec and return the raw ``(spec, flight)`` pairs.
+    ) -> CampaignResults:
+        """Execute every enqueued spec and return a :class:`CampaignResults`.
 
         Runs are executed concurrently via :class:`ProcessPoolExecutor` when
         ``n_workers > 1``. Pass ``n_workers=1`` to run sequentially (useful when
@@ -189,18 +189,18 @@ class Campaign:
 
         base = BaseObjects(env=self.environment, rocket=self.rocket)
         total = len(self.specs)
-        results: list[tuple[RunSpec, FlightData]] = []
+        pairs: list = []
 
         if n_workers <= 1:
             for i, spec in enumerate(self.specs):
-                results.append(execute_run(base, spec))
+                pairs.append(execute_run(base, spec))
                 if show_progress:
                     _print_progress(i + 1, total)
         else:
             with ProcessPoolExecutor(max_workers=n_workers) as pool:
                 futures = [pool.submit(execute_run, base, s) for s in self.specs]
                 for i, future in enumerate(as_completed(futures)):
-                    results.append(future.result())
+                    pairs.append(future.result())
                     if show_progress:
                         _print_progress(i + 1, total)
 
@@ -208,8 +208,8 @@ class Campaign:
             sys.stdout.write("\n")
             sys.stdout.flush()
 
-        results.sort(key=lambda r: self.specs.index(r[0]))
-        return results
+        pairs.sort(key=lambda r: self.specs.index(r[0]))
+        return CampaignResults(pairs)
 
 
 def _as_sweep_values(spec: Any) -> list:
