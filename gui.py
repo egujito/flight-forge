@@ -1008,6 +1008,9 @@ _SWEEP_PATHS = [
     "sim.inclination",
     "sim.heading",
     "sim.rail_length",
+    # Wind — constant surface speed in m/s (sets env.wind_profile)
+    "env.wind_u",
+    "env.wind_v",
 ]
 
 _CAMPAIGN_METRICS = [
