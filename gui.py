@@ -1544,7 +1544,6 @@ class MainWindow(QMainWindow):
         self.run_tab.status_lbl.setText("Complete")
         self.run_tab.status_lbl.setStyleSheet("color: #4ec9b0; margin-left: 12px; font-weight: bold;")
         self.results_tab.populate(flight, sim)
-        self._tabs.setCurrentWidget(self.results_tab)
         self.setWindowTitle(
             f"flightForge  —  Apogee: {sim.linear_params.get('apogee', 0):.0f} m  |  "
             f"Impact: {sim.events.get('impact', [0])[0]:.1f} s"
