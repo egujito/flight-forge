@@ -11,7 +11,8 @@ from .runner import RunSpec
 
 
 class CampaignResults:
-    """Container for the output of :meth:`Campaign.run`.
+    """
+    Container for the output of :meth:`Campaign.run`.
 
     Wraps a list of ``(spec, flight)`` pairs and exposes:
 
@@ -46,7 +47,8 @@ class CampaignResults:
         raise KeyError(f"No run with label '{label}'.")
 
     def summary(self) -> pd.DataFrame:
-        """Return a DataFrame of override values and key flight metrics per run.
+        """
+        Return a DataFrame of override values and key flight metrics per run.
 
         Columns include every override path encountered across runs, plus
         ``apogee_m``, ``apogee_t``, ``max_speed_ms``, ``max_mach``,

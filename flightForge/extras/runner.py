@@ -10,7 +10,8 @@ from ..simulation import Simulation
 
 @dataclass
 class BaseObjects:
-    """Container holding the unmodified simulation inputs.
+    """
+    Container holding the unmodified simulation inputs.
 
     Deep-copied per run so overrides applied in one run cannot leak into another.
     """
@@ -21,7 +22,8 @@ class BaseObjects:
 
 @dataclass
 class RunSpec:
-    """Description of a single simulation run.
+    """
+    Description of a single simulation run.
 
     Attributes:
         label:      Human-readable identifier used in tables and plots.
@@ -38,7 +40,8 @@ class RunSpec:
 
 
 def deep_set(obj: Any, path: str, value: Any) -> None:
-    """Set a nested attribute on ``obj`` using a dotted path.
+    """
+    Set a nested attribute on ``obj`` using a dotted path.
 
     Raises ``AttributeError`` if the leaf attribute does not already exist on
     the target — this catches typos and silent no-op overrides on constructor

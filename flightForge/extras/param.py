@@ -16,14 +16,16 @@ class FixedParam:
 
 @dataclass(frozen=True)
 class SweepParam:
-    """A discrete array of values, one per run."""
+    """
+    A discrete array of values, one per run."""
 
     values: tuple
 
 
 @dataclass(frozen=True)
 class StochasticParam:
-    """A distribution sampled once per run.
+    """
+    A distribution sampled once per run.
 
     Attributes:
         sampler:     Callable ``(rng) -> value`` used for random Monte Carlo.
@@ -45,7 +47,8 @@ ParamLike = Union[FixedParam, SweepParam, StochasticParam, Any]
 
 
 class Param:
-    """Factory for parameter specifications used by :class:`Campaign`.
+    """
+    Factory for parameter specifications used by :class:`Campaign`.
 
     Use the class methods below to build a parameter spec; never instantiate
     :class:`Param` directly.
@@ -96,7 +99,8 @@ class Param:
 
     @staticmethod
     def from_dist(dist: Any) -> StochasticParam:
-        """Wrap any object exposing an ``rvs(random_state=...)`` method.
+        """
+        Wrap any object exposing an ``rvs(random_state=...)`` method.
 
         Compatible with ``scipy.stats`` frozen distributions. If ``dist`` also
         exposes a ``ppf`` method, the parameter becomes usable with Latin

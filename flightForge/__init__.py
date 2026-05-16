@@ -6,7 +6,7 @@ from .parachutes import Parachute
 from .rocket import Rocket
 from .simulation import Simulation
 from .utils import logarithmic_thrust
-from .logger import logger
+from .logger import logger, set_verbose
 
 __all__ = [
     "Environment",
@@ -18,5 +18,6 @@ __all__ = [
     "extras",
     "logarithmic_thrust",
     "logger",
-    "utils"
+    "set_verbose",
+    "utils",
 ]

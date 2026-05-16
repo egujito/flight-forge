@@ -29,7 +29,8 @@ def landing_scatter(
     n_sigma: tuple[float, ...] = (1.0, 2.0),
     show_centroid: bool = True,
 ) -> plt.Axes:
-    """Scatter plot of landing positions with Gaussian dispersion ellipses.
+    """
+    Scatter plot of landing positions with Gaussian dispersion ellipses.
 
     The ellipses are drawn from the eigendecomposition of the (x, y) landing
     covariance and represent constant-Mahalanobis-distance contours.
@@ -76,7 +77,8 @@ def param_correlation(
     results: CampaignResults,
     metrics: Optional[list[str]] = None,
 ) -> pd.DataFrame:
-    """Return Pearson correlations between override parameters and flight metrics.
+    """
+    Return Pearson correlations between override parameters and flight metrics.
 
     Rows are override paths; columns are metric names. Useful for ranking which
     inputs most strongly drive each output.
@@ -100,7 +102,8 @@ def sensitivity_tornado(
     metric: str = "apogee_m",
     ax: Optional[plt.Axes] = None,
 ) -> plt.Axes:
-    """Tornado chart ranking each override parameter by its correlation to ``metric``.
+    """
+    Tornado chart ranking each override parameter by its correlation to ``metric``.
 
     Bars show Pearson r; the chart is sorted by |r| descending so the strongest
     drivers appear at the top.

@@ -14,7 +14,8 @@ from .runner import BaseObjects, RunSpec, execute_run
 
 
 class Campaign:
-    """Batch driver for running many simulations against a shared base setup.
+    """
+    Batch driver for running many simulations against a shared base setup.
 
     A campaign captures a base :class:`Environment` and :class:`Rocket`, plus the
     constructor and run keyword arguments common to all simulations. Use
@@ -30,7 +31,8 @@ class Campaign:
         run_kwargs: Optional[dict[str, Any]] = None,
         label: str = "campaign",
     ) -> None:
-        """Build a campaign description.
+        """
+        Build a campaign description.
 
         Args:
             environment: Base :class:`Environment`. Deep-copied per run.
@@ -53,7 +55,8 @@ class Campaign:
         values: Iterable,
         label_fmt: str = "{path}={value:.3g}",
     ) -> "Campaign":
-        """Enqueue one run per value, overriding ``path`` with that value.
+        """
+        Enqueue one run per value, overriding ``path`` with that value.
 
         Args:
             path:      Dotted attribute path beginning with ``"env."`` or ``"rocket."``.
@@ -85,7 +88,8 @@ class Campaign:
         seed: Optional[int] = None,
         label_fmt: str = "run{i:04d}",
     ) -> "Campaign":
-        """Enqueue runs that vary several attributes at once.
+        """
+        Enqueue runs that vary several attributes at once.
 
         Args:
             params: Mapping from dotted attribute path to one of:
@@ -147,7 +151,8 @@ class Campaign:
         return self
 
     def add_run(self, overrides: dict[str, Any], label: str = "") -> "Campaign":
-        """Enqueue a single run with the given attribute overrides.
+        """
+        Enqueue a single run with the given attribute overrides.
 
         Args:
             overrides: Mapping of dotted attribute paths to override values.
@@ -178,7 +183,8 @@ class Campaign:
         n_workers: int = 4,
         show_progress: bool = True,
     ) -> CampaignResults:
-        """Execute every enqueued spec and return a :class:`CampaignResults`.
+        """
+        Execute every enqueued spec and return a :class:`CampaignResults`.
 
         Runs are executed concurrently via :class:`ProcessPoolExecutor` when
         ``n_workers > 1``. Pass ``n_workers=1`` to run sequentially (useful when
