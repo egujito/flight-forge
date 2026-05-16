@@ -88,17 +88,26 @@ def _resolve_root(base: BaseObjects, path: str) -> tuple[Any, str]:
 def execute_run(base: BaseObjects, spec: RunSpec) -> tuple[RunSpec, FlightData]:
     """Apply ``spec.overrides`` to a deep copy of ``base`` and run a simulation.
 
+    Override paths rooted at ``"sim."`` (e.g. ``"sim.inclination"``) are applied
+    to ``sim_kwargs`` rather than env/rocket attributes, allowing launch parameters
+    to be swept alongside physical properties.
+
     This function is module-level (not a method) so it can be pickled and
     dispatched by :class:`concurrent.futures.ProcessPoolExecutor`.
     """
     local = BaseObjects(env=copy.deepcopy(base.env), rocket=copy.deepcopy(base.rocket))
 
+    sim_overrides: dict[str, Any] = {}
     for path, value in spec.overrides.items():
-        root, tail = _resolve_root(local, path)
-        if not tail:
-            raise KeyError(f"Override path '{path}' must include an attribute after the root.")
-        deep_set(root, tail, value)
+        if path.startswith("sim."):
+            sim_overrides[path[4:]] = value
+        else:
+            root, tail = _resolve_root(local, path)
+            if not tail:
+                raise KeyError(f"Override path '{path}' must include an attribute after the root.")
+            deep_set(root, tail, value)
 
-    sim = Simulation(local.env, local.rocket, **spec.sim_kwargs)
+    sim_kwargs = {**spec.sim_kwargs, **sim_overrides}
+    sim = Simulation(local.env, local.rocket, **sim_kwargs)
     flight = sim.run(**spec.run_kwargs)
     return spec, flight
