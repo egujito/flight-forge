@@ -40,6 +40,11 @@ class RunSpec:
 def deep_set(obj: Any, path: str, value: Any) -> None:
     """Set a nested attribute on ``obj`` using a dotted path.
 
+    Raises ``AttributeError`` if the leaf attribute does not already exist on
+    the target — this catches typos and silent no-op overrides on constructor
+    arguments that were never stored (e.g. ``env.wind_u``, which is consumed
+    inside ``Environment.__init__`` and only kept as ``env.wind_profile``).
+
     Example:
         >>> deep_set(rocket, "motor.burn_time", 4.5)
     """
@@ -47,7 +52,14 @@ def deep_set(obj: Any, path: str, value: Any) -> None:
     target = obj
     for part in parts[:-1]:
         target = getattr(target, part)
-    setattr(target, parts[-1], value)
+    leaf = parts[-1]
+    if not hasattr(target, leaf):
+        raise AttributeError(
+            f"Path '{path}' resolves to attribute '{leaf}' which does not "
+            f"exist on {type(target).__name__}. "
+            f"Did you mean an attribute that is actually stored on the object?"
+        )
+    setattr(target, leaf, value)
 
 
 def deep_get(obj: Any, path: str) -> Any:
