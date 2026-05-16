@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -32,7 +33,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QRadioButton,
-    QScrollArea,
     QSizePolicy,
     QSplitter,
     QTableWidget,
@@ -859,74 +859,98 @@ class RunTab(QWidget):
 # ---------------------------------------------------------------------------
 
 class ResultsTab(QWidget):
+    _METRIC_NAMES = [
+        "Apogee (m)", "Apogee Time (s)", "Max Speed (m/s)", "Max Mach",
+        "Max Acceleration (m/s²)", "Out-of-rail Velocity (m/s)",
+        "Impact Time (s)", "Impact Range (m)",
+    ]
+
     def __init__(self):
         super().__init__()
-        scroll = QScrollArea(); scroll.setWidgetResizable(True)
-        inner = QWidget(); root = QVBoxLayout(inner); scroll.setWidget(inner)
-        outer = QVBoxLayout(self); outer.addWidget(scroll)
+        self._flight = None
 
-        # metrics table
-        metrics_box = QGroupBox("Key Metrics")
-        ml = QVBoxLayout(metrics_box)
-        self.metrics_table = QTableWidget(8, 2)
+        splitter = QSplitter(Qt.Vertical)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(splitter)
+
+        # --- top pane: metrics table ---
+        top = QWidget()
+        tl = QVBoxLayout(top)
+        tl.setContentsMargins(6, 6, 6, 4)
+        tl.addWidget(QLabel("Key Metrics"))
+        self.metrics_table = QTableWidget(len(self._METRIC_NAMES), 2)
         self.metrics_table.setHorizontalHeaderLabels(["Metric", "Value"])
         self.metrics_table.verticalHeader().setVisible(False)
-        self.metrics_table.horizontalHeader().setStretchLastSection(True)
-        self.metrics_table.setMaximumHeight(240)
         self.metrics_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        for i, name in enumerate([
-            "Apogee (m)", "Apogee Time (s)", "Max Speed (m/s)", "Max Mach",
-            "Max Acceleration (m/s²)", "Out-of-rail Velocity (m/s)", "Impact Time (s)", "Impact Range (m)"
-        ]):
+        self.metrics_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeToContents
+        )
+        self.metrics_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.Stretch
+        )
+        for i, name in enumerate(self._METRIC_NAMES):
             self.metrics_table.setItem(i, 0, QTableWidgetItem(name))
             self.metrics_table.setItem(i, 1, QTableWidgetItem("—"))
-        ml.addWidget(self.metrics_table)
-        root.addWidget(metrics_box)
+        tl.addWidget(self.metrics_table)
+        splitter.addWidget(top)
 
-        # custom plot
-        plot_box = QGroupBox("Custom Plot")
-        pl = QVBoxLayout(plot_box)
+        # --- bottom pane: plot sub-tabs ---
+        bottom_tabs = QTabWidget()
+
+        plot_widget = QWidget()
+        pl = QVBoxLayout(plot_widget)
         ctrl = QHBoxLayout()
         ctrl.addWidget(QLabel("X:"))
-        self.x_combo = QComboBox(); self.x_combo.addItems(CHANNELS); self.x_combo.setCurrentText("t")
+        self.x_combo = QComboBox()
+        self.x_combo.addItems(CHANNELS)
+        self.x_combo.setCurrentText("t")
         ctrl.addWidget(self.x_combo)
         ctrl.addWidget(QLabel("Y:"))
-        self.y_combo = QComboBox(); self.y_combo.addItems(CHANNELS); self.y_combo.setCurrentText("z")
+        self.y_combo = QComboBox()
+        self.y_combo.addItems(CHANNELS)
+        self.y_combo.setCurrentText("z")
         ctrl.addWidget(self.y_combo)
-        self.plot_btn = QPushButton("Plot"); self.plot_btn.clicked.connect(self._replot)
+        self.plot_btn = QPushButton("Plot")
+        self.plot_btn.clicked.connect(self._replot)
         ctrl.addWidget(self.plot_btn)
         ctrl.addStretch()
         pl.addLayout(ctrl)
         self.custom_canvas = LiveCanvas2D("x", "y", "Custom Plot", "#4a9eff")
-        self.custom_canvas.setMinimumHeight(280)
         pl.addWidget(self.custom_canvas)
-        root.addWidget(plot_box)
+        bottom_tabs.addTab(plot_widget, "Plot")
 
-        # 3D trajectory
-        traj_box = QGroupBox("3D Trajectory")
-        tl = QVBoxLayout(traj_box)
+        traj_widget = QWidget()
+        tw = QVBoxLayout(traj_widget)
         self.traj_canvas = LiveCanvas3D()
-        self.traj_canvas.setMinimumHeight(380)
-        tl.addWidget(self.traj_canvas)
-        root.addWidget(traj_box)
+        tw.addWidget(self.traj_canvas)
+        bottom_tabs.addTab(traj_widget, "3D Trajectory")
 
-        self._flight = None
+        splitter.addWidget(bottom_tabs)
+        splitter.setSizes([220, 600])
 
     def populate(self, flight, sim) -> None:
         self._flight = flight
         apogee = sim.linear_params.get("apogee") or float(np.max(flight.z))
         apogee_t_event = sim.events.get("apogee")
-        apogee_t = apogee_t_event[0] if apogee_t_event else float(flight.t[int(np.argmax(flight.z))])
-        max_speed = float(np.max(flight.speed))
-        max_mach = float(np.max(flight.mach))
-        max_accel = float(np.max(flight.acceleration))
+        apogee_t = (
+            apogee_t_event[0] if apogee_t_event
+            else float(flight.t[int(np.argmax(flight.z))])
+        )
         v_rail = sim.linear_params.get("out_of_rail_velocity")
         impact_event = sim.events.get("impact")
         impact_t = impact_event[0] if impact_event else float(flight.t[-1])
-        impact_range = float(np.hypot(flight.x[-1], flight.y[-1]))
 
-        values = [apogee, apogee_t, max_speed, max_mach, max_accel,
-                  v_rail if v_rail is not None else float("nan"), impact_t, impact_range]
+        values = [
+            apogee,
+            apogee_t,
+            float(np.max(flight.speed)),
+            float(np.max(flight.mach)),
+            float(np.max(flight.acceleration)),
+            v_rail if v_rail is not None else float("nan"),
+            impact_t,
+            float(np.hypot(flight.x[-1], flight.y[-1])),
+        ]
         for i, v in enumerate(values):
             item = QTableWidgetItem(f"{v:.3f}" if v == v else "—")
             item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -942,19 +966,21 @@ class ResultsTab(QWidget):
         yc = self.y_combo.currentText()
         xs = getattr(self._flight, xc)
         ys = getattr(self._flight, yc)
-        self.custom_canvas.ax.cla()
-        self.custom_canvas.ax.set_facecolor("#2d2d2d")
-        for spine in self.custom_canvas.ax.spines.values():
+        ax = self.custom_canvas.ax
+        ax.cla()
+        ax.set_facecolor("#2d2d2d")
+        for spine in ax.spines.values():
             spine.set_color("#555555")
-        self.custom_canvas.ax.tick_params(colors="#888888", labelsize=8)
-        self.custom_canvas.ax.xaxis.label.set_color("#aaaaaa")
-        self.custom_canvas.ax.yaxis.label.set_color("#aaaaaa")
-        self.custom_canvas.ax.grid(True, alpha=0.2, color="#555555")
-        self.custom_canvas.ax.plot(xs, ys, color="#4a9eff", linewidth=1.5)
-        self.custom_canvas.ax.set_xlabel(xc)
-        self.custom_canvas.ax.set_ylabel(yc)
-        self.custom_canvas.ax.set_title(f"{yc} vs {xc}", color="#d4d4d4")
-        self.custom_canvas.line, = self.custom_canvas.ax.plot([], [])
+        ax.tick_params(colors="#888888", labelsize=8)
+        ax.xaxis.label.set_color("#aaaaaa")
+        ax.yaxis.label.set_color("#aaaaaa")
+        ax.grid(True, alpha=0.2, color="#555555")
+        ax.plot(xs, ys, color="#4a9eff", linewidth=1.5)
+        ax.set_xlabel(xc)
+        ax.set_ylabel(yc)
+        ax.set_title(f"{yc} vs {xc}", color="#d4d4d4")
+        # keep line attr in sync so LiveCanvas2D.update_data still works if called
+        self.custom_canvas.line, = ax.plot([], [], alpha=0)
         self.custom_canvas.draw_idle()
 
 
